@@ -1,0 +1,29 @@
+{
+  "_comment": "검증된 LIVE RSS 피드만 등록 (2026-05-28 스크립트 접근 경로로 실측). 죽은/차단된 피드(WSJ, FT, Guardian, NYT, The Verge, Ars Technica, Reuters)는 README.md의 제외 사유 참고. area: economy|markets|ai_tech, tier: 1=주요 1차 출처, region: US|EU|GLOBAL.",
+  "window_hours_default": 30,
+  "per_group_cap": 8,
+  "dedupe_threshold": 0.72,
+  "keywords": {
+    "economy": ["inflation", "cpi", "pce", "gdp", "jobs", "payroll", "payrolls", "unemployment", "rate", "rates", "interest rate", "fed", "federal reserve", "ecb", "central bank", "tariff", "trade", "recession", "deficit", "budget", "stimulus", "growth", "consumer"],
+    "markets": ["stocks", "stock", "s&p", "nasdaq", "dow", "bond", "bonds", "yield", "yields", "oil", "gold", "earnings", "ipo", "dollar", "treasury", "ftse", "dax", "shares", "equities", "futures", "crypto", "bitcoin", "rally", "selloff"],
+    "ai_tech": ["ai", "artificial intelligence", "openai", "anthropic", "nvidia", "chip", "chips", "semiconductor", "model", "llm", "google", "microsoft", "meta", "apple", "amazon", "datacenter", "data center", "cloud", "startup", "robot", "robotics", "gpu", "chatgpt", "gemini", "agent"]
+  },
+  "feeds": [
+    {"name": "CNBC Top News",    "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "area": "economy",  "tier": 1, "region": "US"},
+    {"name": "CNBC Markets",     "url": "https://www.cnbc.com/id/15839135/device/rss/rss.html",  "area": "markets",  "tier": 1, "region": "US"},
+    {"name": "CNBC Economy",     "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html",  "area": "economy",  "tier": 1, "region": "US"},
+    {"name": "CNBC Finance",     "url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",  "area": "markets",  "tier": 1, "region": "US"},
+    {"name": "CNBC Technology",  "url": "https://www.cnbc.com/id/19854910/device/rss/rss.html",  "area": "ai_tech",  "tier": 1, "region": "US"},
+    {"name": "BBC Business",     "url": "https://feeds.bbci.co.uk/news/business/rss.xml",         "area": "economy",  "tier": 1, "region": "EU"},
+    {"name": "BBC Technology",   "url": "https://feeds.bbci.co.uk/news/technology/rss.xml",       "area": "ai_tech",  "tier": 1, "region": "EU"},
+    {"name": "BBC World",        "url": "https://feeds.bbci.co.uk/news/world/rss.xml",            "area": "economy",  "tier": 1, "region": "EU"},
+    {"name": "MarketWatch",      "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories", "area": "markets", "tier": 2, "region": "US"},
+    {"name": "Yahoo Finance",    "url": "https://finance.yahoo.com/news/rssindex",                "area": "markets",  "tier": 2, "region": "US"},
+    {"name": "Investing.com",    "url": "https://www.investing.com/rss/news.rss",                 "area": "markets",  "tier": 2, "region": "GLOBAL"},
+    {"name": "Bloomberg Markets","url": "https://feeds.bloomberg.com/markets/news.rss",           "area": "markets",  "tier": 1, "region": "GLOBAL"},
+    {"name": "TechCrunch",       "url": "https://techcrunch.com/feed/",                           "area": "ai_tech",  "tier": 2, "region": "US"},
+    {"name": "TechCrunch AI",    "url": "https://techcrunch.com/category/artificial-intelligence/feed/", "area": "ai_tech", "tier": 2, "region": "US"},
+    {"name": "MIT Technology Review", "url": "https://www.technologyreview.com/feed/",            "area": "ai_tech",  "tier": 1, "region": "US"},
+    {"name": "VentureBeat AI",   "url": "https://venturebeat.com/category/ai/feed/",              "area": "ai_tech",  "tier": 2, "region": "US"}
+  ]
+}
