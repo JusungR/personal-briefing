@@ -2,14 +2,23 @@
 
 ## 날짜 계산 (최우선)
 
-시스템이 제공하는 `currentDate`는 UTC 기준이다.
+시스템이 제공하는 `currentDate`는 UTC 기준 날짜만 제공한다(시각 미포함).
 한국 시간(KST, UTC+9)으로 오늘 날짜를 먼저 계산한다.
 
-- KST 오늘 = UTC `currentDate` + 9시간
-- UTC 기준 15:00 이전이면 한국은 이미 다음 날
-- 예) UTC 2026-05-27 → KST 2026-05-28
+- UTC 00:00~14:59 → KST는 UTC와 **같은 날**
+- UTC 15:00~23:59 → KST는 UTC **다음 날** (KST_TODAY = UTC currentDate + 1일)
+- 예) UTC 2026-05-27, 시각 미상 → 보수적으로 KST 2026-05-28로 간주
+- 예) UTC 2026-05-28, 시각 미상 → 보수적으로 KST 2026-05-29로 간주
 
-이하 모든 날짜는 **KST 오늘 날짜** 기준으로 동작한다.
+> 브리핑은 통상 한국 아침에 실행되므로, UTC 시각이 미상일 때는
+> KST = UTC currentDate + 1일로 계산한다(보수적 기준).
+
+아래 두 날짜 변수를 먼저 확정한 뒤 이하 모든 섹션에 적용한다.
+
+| 변수 | 값 | 용도 |
+|---|---|---|
+| **KST_TODAY** | UTC currentDate + 1일 | 날씨·일정·메일 제목 |
+| **NEWS_DATE** | KST_TODAY - 1일 (= UTC currentDate) | 간밤 뉴스 검색 날짜 |
 
 ---
 
@@ -25,9 +34,9 @@ WebSearch로 오늘 서울 날씨 조회:
 
 ## 2. 오늘 일정
 
-Google Calendar의 `list_events`로 오늘 00:00 ~ 24:00 (Asia/Seoul) 범위의 이벤트 조회.
-- `startTime`: KST 오늘 날짜 `T00:00:00+09:00`
-- `endTime`:   KST 오늘 날짜 `T23:59:59+09:00`
+Google Calendar의 `list_events`로 **KST_TODAY** 00:00 ~ 24:00 (Asia/Seoul) 범위의 이벤트 조회.
+- `startTime`: `{KST_TODAY}T00:00:00+09:00`
+- `endTime`:   `{KST_TODAY}T23:59:59+09:00`
 - `timeZone`: `Asia/Seoul`
 - 시간순 나열: "HH:MM  제목  (위치 또는 회의 링크)"
 - 종일 일정: "[종일] 제목"
@@ -35,7 +44,8 @@ Google Calendar의 `list_events`로 오늘 00:00 ~ 24:00 (Asia/Seoul) 범위의 
 
 ## 3. 간밤 미국·유럽 주요 뉴스
 
-어제 현지 시간 기준 발생한 주요 뉴스를 WebSearch로 조회.
+**NEWS_DATE** 현지 시간 기준 발생한 주요 뉴스를 WebSearch로 조회.
+(= 한국이 자는 동안 미국·유럽의 낮/저녁에 해당하는 날짜)
 - 미국 최대 5건, 유럽 최대 5건
 - 카테고리: 정치, 경제, 산업·기술, 시장. 가십·연예·스포츠 제외.
 - 1차 출처(로이터, AP, FT, BBC, Bloomberg, WSJ 등) 우선.
@@ -54,6 +64,10 @@ Google Calendar의 `list_events`로 오늘 00:00 ~ 24:00 (Asia/Seoul) 범위의 
 
 **메일 발송:**
 - 받는 사람: yhwsr92@gmail.com
-- 제목: `[Daily Briefing] {KST 오늘 날짜}`
+- 제목: `[Daily Briefing] {KST_TODAY}`
 - 본문: 위의 1, 2, 3번 섹션을 정리된 형식으로 구성
-- 발송 도구: `mcp__c3a829d6-ae8b-468b-af09-890a5d2b8e66__create_draft` (Gmail 드래프트 생성)
+- 발송 도구: `mcp__Gmail__create_draft` (Gmail 드래프트 생성)
+
+> **자동 발송 제한:** 현재 Gmail MCP는 `create_draft`(임시저장)만 지원하며
+> 직접 발송 API는 제공되지 않는다. 드래프트 생성 후 Gmail에서 수동 발송하거나,
+> Google Apps Script로 별도 자동 발송 트리거를 구성해야 한다.
