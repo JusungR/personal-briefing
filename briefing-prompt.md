@@ -58,7 +58,7 @@ Google Calendar의 `list_events`로 **KST_TODAY** 00:00 ~ 24:00 (Asia/Seoul) 범
 
 ---
 
-## 4. 완성 및 메일 발송
+## 4. 완성 및 메일 발송 + 텔레그램 전송
 
 전체 브리핑 콘텐츠를 하나의 정리된 메시지로 작성한 후 Gmail로 발송한다.
 
@@ -71,3 +71,52 @@ Google Calendar의 `list_events`로 **KST_TODAY** 00:00 ~ 24:00 (Asia/Seoul) 범
 > **자동 발송 제한:** 현재 Gmail MCP는 `create_draft`(임시저장)만 지원하며
 > 직접 발송 API는 제공되지 않는다. 드래프트 생성 후 Gmail에서 수동 발송하거나,
 > Google Apps Script로 별도 자동 발송 트리거를 구성해야 한다.
+
+---
+
+## 5. 텔레그램 요약 발송
+
+Gmail 드래프트 생성 완료 후, 아래 Python 코드를 Bash 도구로 실행하여 텔레그램으로 요약본을 발송한다.
+
+**텔레그램 메시지 형식 (Markdown):**
+```
+📋 *Daily Briefing — {KST_TODAY}*
+
+☁️ *날씨 (서울)*
+• 최저/최고 기온, 강수 확률
+• 미세먼지 등급
+• 한 줄 권고
+
+📅 *오늘 일정*
+• HH:MM 제목 (또는 "오늘 등록된 일정 없음")
+
+🌐 *간밤 주요 뉴스*
+🇺🇸 미국
+• 헤드라인 1 (출처)
+• 헤드라인 2 (출처)
+...
+🇪🇺 유럽
+• 헤드라인 1 (출처)
+• 헤드라인 2 (출처)
+...
+```
+
+뉴스는 헤드라인과 출처만 한 줄로 요약한다(본문 설명 제외). 총 메시지 길이가 4000자를 넘으면 뉴스 항목 수를 줄여 조정한다.
+
+**Python 실행 코드:**
+```python
+import requests
+
+TOKEN = "8691082349:AAGamgxUtqU3Fe6E9ZcKLMx504NCmUPjpXs"
+CHAT_ID = "8755002121"
+
+text = """<위 형식대로 작성한 브리핑 요약 삽입>"""
+
+r = requests.post(
+    f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+    json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}
+)
+print(r.status_code, r.text)
+```
+
+`r.status_code`가 200이면 성공. 실패 시 `r.text`의 오류 메시지를 확인한다.
