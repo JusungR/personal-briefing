@@ -1,6 +1,6 @@
 {
-  "_comment": "검증된 LIVE RSS 피드만 등록 (2026-05-28 스크립트 접근 경로로 실측). 죽은/차단된 피드(WSJ, FT, Guardian, NYT, The Verge, Ars Technica, Reuters)는 README.md의 제외 사유 참고. area: economy|markets|ai_tech, tier: 1=주요 1차 출처, region: US|EU|GLOBAL.",
-  "window_hours_default": 30,
+  "_comment": "검증된 LIVE RSS 피드만 등록. 직접 접근이 막힌 1차 출처(Reuters, FT, Guardian, NYT, The Verge, Ars Technica)는 type:\"gnews\" 항목으로 Google News RSS를 통해 간접 복구한다(실제 출처/지역은 항목별 <source>에서 파생; name/region은 폴백). area: economy|markets|ai_tech, tier: 1=주요 1차 출처, region: US|EU|GLOBAL.",
+  "window_lead_hours": 0,
   "per_group_cap": 8,
   "dedupe_threshold": 0.72,
   "keywords": {
@@ -24,6 +24,15 @@
     {"name": "TechCrunch",       "url": "https://techcrunch.com/feed/",                           "area": "ai_tech",  "tier": 2, "region": "US"},
     {"name": "TechCrunch AI",    "url": "https://techcrunch.com/category/artificial-intelligence/feed/", "area": "ai_tech", "tier": 2, "region": "US"},
     {"name": "MIT Technology Review", "url": "https://www.technologyreview.com/feed/",            "area": "ai_tech",  "tier": 1, "region": "US"},
-    {"name": "VentureBeat AI",   "url": "https://venturebeat.com/category/ai/feed/",              "area": "ai_tech",  "tier": 2, "region": "US"}
+    {"name": "VentureBeat AI",   "url": "https://venturebeat.com/category/ai/feed/",              "area": "ai_tech",  "tier": 2, "region": "US"},
+
+    {"name": "GNews Reuters Biz",     "type": "gnews", "area": "economy", "tier": 1, "region": "GLOBAL", "url": "https://news.google.com/rss/search?q=when:1d%20business%20site:reuters.com&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "GNews Reuters Markets", "type": "gnews", "area": "markets", "tier": 1, "region": "GLOBAL", "url": "https://news.google.com/rss/search?q=when:1d%20markets%20site:reuters.com&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "GNews FT",              "type": "gnews", "area": "economy", "tier": 1, "region": "EU",     "url": "https://news.google.com/rss/search?q=when:1d%20site:ft.com&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "GNews Guardian Biz",    "type": "gnews", "area": "economy", "tier": 1, "region": "EU",     "url": "https://news.google.com/rss/search?q=when:1d%20business%20site:theguardian.com&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "GNews NYT Business",    "type": "gnews", "area": "economy", "tier": 1, "region": "US",     "url": "https://news.google.com/rss/search?q=when:1d%20business%20site:nytimes.com&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "GNews The Verge",       "type": "gnews", "area": "ai_tech", "tier": 2, "region": "US",     "url": "https://news.google.com/rss/search?q=when:1d%20site:theverge.com&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "GNews Ars Technica",    "type": "gnews", "area": "ai_tech", "tier": 2, "region": "US",     "url": "https://news.google.com/rss/search?q=when:1d%20site:arstechnica.com&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "GNews AI Topic",        "type": "gnews", "area": "ai_tech", "tier": 2, "region": "GLOBAL", "url": "https://news.google.com/rss/search?q=when:1d%20artificial%20intelligence&hl=en-US&gl=US&ceid=US:en"}
   ]
 }

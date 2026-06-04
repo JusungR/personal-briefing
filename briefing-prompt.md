@@ -52,11 +52,13 @@ Google Calendar의 `list_events`로 **KST_TODAY** 00:00 ~ 24:00 (Asia/Seoul) 범
 Bash로 뉴스 수집 스크립트를 실행해 분야별 후보 목록을 받는다:
 
 ```bash
-python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE} --hours 30
+python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE}
 ```
 
 - stdout에 `AI/TECH · ECONOMY · MARKETS · OTHER MAJOR` 그룹별로 점수순 후보가 출력된다.
   각 항목은 `[score | 출처(+N 매체) | 지역 | 시각]`, 헤드라인, 요약, url 형식.
+- 수집 윈도우는 **NEWS_DATE 00:00 UTC에 고정**돼 있어, 전날 브리핑에 나간 기사가
+  다시 후보로 올라오지 않는다(전일자 중복 방지). 별도 `--hours`는 지정하지 않는다.
 - **스크립트가 실패하거나(exit≠0) 결과가 비면**, 아래 3-3의 기존 WebSearch-only 방식으로
   폴백한다. (브리핑은 절대 거르지 않는다.)
 
@@ -67,9 +69,12 @@ python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE} --h
    우선한다. 남는 자리는 `OTHER MAJOR`의 주요 미·유럽 뉴스로 채운다.
    - 캡: 미국 최대 5건, 유럽 최대 5건. 가십·연예·스포츠 제외.
 2. **신선도·정확도**: 각 후보의 시각이 NEWS_DATE 윈도우 안인지 확인하고, 오래되거나
-   어긋나는 항목은 버린다. 상위 2~3개 핵심 기사는 **WebSearch로 사실·최신 전개를 확인**하고,
-   스크립트가 닿지 못하는 1차 출처(로이터, FT, NYT, 가디언 등)를 보강한다.
-   WebSearch는 확인·확장용이지 주 수집기가 아니다.
+   어긋나는 항목은 버린다. 상위 2~3개 핵심 기사는 **WebSearch로 사실·최신 전개를 확인**한다.
+   - 로이터·FT·NYT·가디언·The Verge·Ars Technica는 이제 Google News(`출처`가 매체명으로
+     표기되는 항목)로 직접 유입된다. 단 이 항목들은 **요약이 비어 있고 url이 Google
+     리다이렉트**이므로, 헤드라인만 보고 인용하지 말고 상위 기사는 WebSearch로 사실을
+     확인한 뒤 인용한다.
+   - WebSearch는 확인·확장용이지 주 수집기가 아니다.
 
 ### 3-3. 출력 형식 (폴백 시에도 동일)
 
@@ -147,3 +152,25 @@ print(r.status_code, r.text)
 ```
 
 `r.status_code`가 200이면 성공. 실패 시 `r.text`의 오류 메시지를 확인한다.
+
+---
+
+## 6. 브리핑 기록 및 보관 (git commit)
+
+발송이 끝나면, 향후 리뷰·개선 분석을 위해 오늘 브리핑을 레포에 보관한다.
+이 단계는 best-effort이며, 실패해도 이미 나간 브리핑에는 영향이 없다.
+
+1. Section 4에서 완성한 브리핑 본문(날씨·일정·뉴스 정리본)을 그대로
+   `archive/{KST_TODAY}.md` 파일로 저장한다(폴더가 없으면 생성).
+2. 아래를 Bash로 실행해 커밋·푸시한다(`{KST_TODAY}`는 실제 날짜로 치환):
+
+```bash
+cd /home/user/personal-briefing
+git add archive/{KST_TODAY}.md
+git commit -m "Archive daily briefing {KST_TODAY}"
+git push -u origin HEAD || (sleep 2 && git push -u origin HEAD)
+```
+
+- 커밋 메시지는 위 형식을 따른다.
+- 푸시가 네트워크 오류로 실패하면 몇 차례 재시도하되, 끝내 실패해도 브리핑 자체는
+  완료된 것으로 간주한다.
