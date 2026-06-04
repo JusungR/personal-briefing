@@ -1,0 +1,117 @@
+name: Send Daily Briefing to Telegram
+
+on:
+  push:
+    paths:
+      - 'archive/*.md'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '브리핑 날짜 (YYYY-MM-DD, 비워두면 최신 파일 사용)'
+        required: false
+        type: string
+
+jobs:
+  send-telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find archive file
+        id: archive
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            FILE="archive/${{ github.event.inputs.date }}.md"
+          else
+            FILE=$(ls archive/*.md 2>/dev/null | sort | tail -1)
+          fi
+          if [ ! -f "$FILE" ]; then
+            echo "Archive file not found: $FILE"
+            exit 1
+          fi
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+          echo "date=$(basename $FILE .md)" >> $GITHUB_OUTPUT
+
+      - name: Send to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ARCHIVE_FILE: ${{ steps.archive.outputs.file }}
+        run: |
+          python3 << 'PYEOF'
+          import os, re, requests, sys
+
+          token = os.environ['TELEGRAM_BOT_TOKEN']
+          chat_id = os.environ['TELEGRAM_CHAT_ID']
+          file_path = os.environ['ARCHIVE_FILE']
+          date = os.path.basename(file_path).replace('.md', '')
+
+          with open(file_path) as f:
+              content = f.read()
+
+          def extract_section(text, heading):
+              m = re.search(rf'{re.escape(heading)}(.*?)(?=\n##|\Z)', text, re.DOTALL)
+              return m.group(1).strip() if m else ''
+
+          def md_to_bullets(text):
+              lines = [l.strip() for l in text.split('\n') if l.strip().startswith('-')]
+              return '\n'.join(
+                  '• ' + re.sub(r'^\*\*|\*\*$', '', l.lstrip('- ').strip())
+                  for l in lines
+              )
+
+          def parse_news(text):
+              items = []
+              for block in re.split(r'\n\n+', text.strip()):
+                  lines = [l.strip() for l in block.strip().split('\n') if l.strip()]
+                  if not lines:
+                      continue
+                  headline = re.sub(r'^\*\*|\*\*$', '', lines[0]).strip()
+                  if not headline or headline.startswith('#'):
+                      continue
+                  src = next(
+                      (re.search(r'출처:\s*(.+)', l).group(1).strip()
+                       for l in lines[1:] if re.search(r'출처:', l)),
+                      ''
+                  )
+                  items.append(f"• {headline}" + (f" ({src})" if src else ''))
+              return '\n'.join(items)
+
+          weather_sec = extract_section(content, '## ☁️ 날씨 (서울)')
+          schedule_sec = extract_section(content, '## 📅 오늘 일정')
+          news_sec = extract_section(content, '## 🌐 간밤 미국·유럽 주요 뉴스')
+
+          weather_bullets = md_to_bullets(weather_sec)
+          schedule_bullets = md_to_bullets(schedule_sec) or '• 오늘 등록된 일정 없음'
+
+          us_m = re.search(r'### 🇺🇸 미국(.*?)(?=###|\Z)', news_sec, re.DOTALL)
+          eu_m = re.search(r'### 🇪🇺 유럽(.*?)(?=###|\Z)', news_sec, re.DOTALL)
+          us_bullets = parse_news(us_m.group(1)) if us_m else ''
+          eu_bullets = parse_news(eu_m.group(1)) if eu_m else ''
+
+          text = f"""📋 *Daily Briefing — {date}*
+
+☁️ *날씨 (서울)*
+{weather_bullets}
+
+📅 *오늘 일정*
+{schedule_bullets}
+
+🌐 *간밤 주요 뉴스*
+🇺🇸 미국
+{us_bullets}
+🇪🇺 유럽
+{eu_bullets}"""
+
+          # 4000자 초과 시 뉴스 항목 줄이기
+          if len(text) > 4000:
+              text = text[:3997] + '...'
+
+          r = requests.post(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              json={'chat_id': chat_id, 'text': text, 'parse_mode': 'Markdown'}
+          )
+          print(r.status_code, r.json())
+          sys.exit(0 if r.status_code == 200 else 1)
+          PYEOF
