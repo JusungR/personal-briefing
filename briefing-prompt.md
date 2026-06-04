@@ -97,8 +97,30 @@ python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE}
 **메일 발송:**
 - 받는 사람: yhwsr92@gmail.com
 - 제목: `[Daily Briefing] {KST_TODAY}`
-- 본문: 위의 1, 2, 3번 섹션을 정리된 형식으로 구성
+- 본문: 위의 1, 2, 3번 섹션을 정리된 형식으로 구성한 뒤, **맨 아래에 뉴스 원문 링크 목록을 추가**한다.
 - 발송 도구: `mcp__Gmail__create_draft` (Gmail 드래프트 생성)
+
+**뉴스 원문 링크 (본문 최하단):**
+
+브리핑 본문이 끝난 뒤 다음 형식으로 기사 링크를 나열한다:
+
+```
+---
+📎 원문 링크
+
+[헤드라인 한국어 제목] — 매체명
+URL
+
+[헤드라인 한국어 제목] — 매체명
+URL
+...
+```
+
+- 본문에 인용된 기사 순서대로 나열한다.
+- URL은 collect-news.py 출력의 url 필드를 그대로 사용한다.
+  Google News 리다이렉트 URL도 그대로 남긴다(원문 확인용으로 충분).
+- WebSearch로 사실 확인한 기사는 해당 WebSearch 결과 URL을 사용한다.
+- 폴백(WebSearch-only) 시에도 동일하게 링크 목록을 추가한다.
 
 > **자동 발송 제한:** 현재 Gmail MCP는 `create_draft`(임시저장)만 지원하며
 > 직접 발송 API는 제공되지 않는다. 드래프트 생성 후 Gmail에서 수동 발송하거나,
