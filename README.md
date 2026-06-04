@@ -12,6 +12,18 @@ Gmail 드래프트와 텔레그램으로 보낸다.
 | `news-feeds.json` | 뉴스 피드 목록과 키워드·점수 설정(데이터 기반, 자유롭게 편집). |
 | `gas-auto-send/Code.gs` | `[Daily Briefing]` Gmail 드래프트를 매일 자동 발송하는 Google Apps Script. |
 
+## 환경 변수
+
+비밀값은 코드/깃에 두지 않고 원격 실행 환경(클로드루틴)의 환경 설정에 등록한다.
+
+| 환경 변수 | 용도 |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | 텔레그램 봇 인증 토큰(BotFather 발급) |
+| `TELEGRAM_CHAT_ID` | 브리핑 요약을 받을 chat_id |
+
+> 토큰이 과거 커밋에 노출된 적이 있으면 BotFather에서 **재발급(revoke)** 해 무효화한다.
+> 깃 히스토리에 남은 값은 코드 수정만으로는 사라지지 않는다.
+
 ## 뉴스 수집 (collect-news.py)
 
 기존에는 뉴스가 WebSearch 단일 지시에만 의존해 분야 누락·오래된 기사 등 품질이

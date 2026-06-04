@@ -130,12 +130,24 @@ Gmail 드래프트 생성 완료 후, 아래 Python 코드를 Bash 도구로 실
 
 뉴스는 헤드라인과 출처만 한 줄로 요약한다(본문 설명 제외). 총 메시지 길이가 4000자를 넘으면 뉴스 항목 수를 줄여 조정하되, **점수가 낮은 항목부터 제거하고 관심분야(경제·시장·AI/기술)별 최소 1건은 유지**해 균형을 보존한다.
 
+**토큰 관리 (중요):** 봇 토큰과 chat_id는 코드에 하드코딩하지 않고 **환경 변수**로 주입한다.
+원격 실행 환경(클로드루틴)의 환경 설정에서 아래 두 변수를 등록해 둔다.
+
+| 환경 변수 | 값 | 용도 |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | BotFather 발급 토큰 | 텔레그램 봇 인증 |
+| `TELEGRAM_CHAT_ID` | 수신 chat_id | 메시지 수신 대상 |
+
 **Python 실행 코드:**
 ```python
+import os
+import sys
 import requests
 
-TOKEN = "8691082349:AAGamgxUtqU3Fe6E9ZcKLMx504NCmUPjpXs"
-CHAT_ID = "8755002121"
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+if not TOKEN or not CHAT_ID:
+    sys.exit("환경 변수 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 가 설정되지 않았습니다.")
 
 text = """<위 형식대로 작성한 브리핑 요약 삽입>"""
 
@@ -147,3 +159,5 @@ print(r.status_code, r.text)
 ```
 
 `r.status_code`가 200이면 성공. 실패 시 `r.text`의 오류 메시지를 확인한다.
+
+> **참고:** 과거 커밋에 토큰이 노출된 적이 있으면 BotFather에서 토큰을 재발급해 무효화한다.
