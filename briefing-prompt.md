@@ -136,19 +136,28 @@ Gmail 드래프트 생성 완료 후, 아래 Python 코드를 Bash 도구로 실
 뉴스는 헤드라인과 출처만 한 줄로 요약한다(본문 설명 제외). 총 메시지 길이가 4000자를 넘으면 뉴스 항목 수를 줄여 조정하되, **점수가 낮은 항목부터 제거하고 관심분야(경제·시장·AI/기술)별 최소 1건은 유지**해 균형을 보존한다.
 
 **Python 실행 코드:**
+
+> **시크릿 주입:** 토큰과 챗 ID는 코드/저장소에 하드코딩하지 않고 **환경변수**로 읽는다.
+> 클로드루틴 환경설정에 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`를 등록해 두어야 한다.
+> 둘 중 하나라도 비어 있으면 발송을 건너뛰고 그 사실을 출력한다(브리핑 자체는 영향 없음).
+
 ```python
+import os
 import requests
 
-TOKEN = "8691082349:AAGamgxUtqU3Fe6E9ZcKLMx504NCmUPjpXs"
-CHAT_ID = "8755002121"
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 text = """<위 형식대로 작성한 브리핑 요약 삽입>"""
 
-r = requests.post(
-    f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-    json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}
-)
-print(r.status_code, r.text)
+if not TOKEN or not CHAT_ID:
+    print("텔레그램 발송 건너뜀: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID 환경변수 미설정")
+else:
+    r = requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}
+    )
+    print(r.status_code, r.text)
 ```
 
 `r.status_code`가 200이면 성공. 실패 시 `r.text`의 오류 메시지를 확인한다.
