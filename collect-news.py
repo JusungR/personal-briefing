@@ -7,6 +7,9 @@
 
 외부 의존성 없음 — Python 표준 라이브러리만 사용한다.
 
+수집 윈도우는 기본적으로 NEWS_DATE 00:00 UTC에 고정된다(전일자 중복 방지).
+--hours N 을 주면 기존 롤링(now-N) 방식으로 디버그할 수 있다.
+
 사용 예:
     python3 collect-news.py --news-date 2026-05-27
     python3 collect-news.py --news-date 2026-05-27 --hours 30 --config news-feeds.json
@@ -52,6 +55,19 @@ AREA_LABEL = {
 _TAG = re.compile(r"\{.*\}")
 _HTML_TAG = re.compile(r"<[^>]+>")
 _WORD = re.compile(r"[a-z0-9&]+")
+# 구글뉴스 제목의 " - 출처" 접미사
+_GNEWS_SUFFIX = re.compile(r"\s+-\s+[^-]+$")
+# 도메인 → 지역 매핑 (구글뉴스 항목의 <source url>에서 실제 지역 추론)
+_DOMAIN_REGION = {
+    "reuters.com": "GLOBAL",
+    "ft.com": "EU",
+    "theguardian.com": "EU",
+    "bbc.co.uk": "EU",
+    "bbc.com": "EU",
+    "nytimes.com": "US",
+    "theverge.com": "US",
+    "arstechnica.com": "US",
+}
 _STOPWORDS = {
     "the", "a", "an", "of", "to", "in", "on", "for", "and", "as", "at",
     "by", "is", "are", "be", "with", "from", "after", "over", "amid",
@@ -61,6 +77,17 @@ _STOPWORDS = {
 
 def localname(tag):
     return _TAG.sub("", tag or "")
+
+
+def domain_to_region(domain):
+    """도메인 문자열에서 지역(US/EU/GLOBAL) 추론. 매칭 없으면 None."""
+    if not domain:
+        return None
+    domain = domain.lower()
+    for host, region in _DOMAIN_REGION.items():
+        if host in domain:
+            return region
+    return None
 
 
 def log(msg):
@@ -118,6 +145,7 @@ def parse_date(value):
 
 def extract_entries(raw, feed):
     """RSS <item> 와 Atom <entry> 모두 처리해 정규화된 dict 리스트 반환."""
+    is_gnews = feed.get("type") == "gnews"
     entries = []
     root = ET.fromstring(raw)
     nodes = []
@@ -129,6 +157,8 @@ def extract_entries(raw, feed):
         link = ""
         summary = ""
         published = None
+        src_name = ""
+        src_domain = ""
         for child in node:
             name = localname(child.tag)
             if name == "title":
@@ -142,6 +172,10 @@ def extract_entries(raw, feed):
                         link = href
                 elif child.text:
                     link = child.text.strip()
+            elif name == "source":
+                # 구글뉴스: <source url="https://www.reuters.com">Reuters</source>
+                src_name = strip_html(child.text or "")
+                src_domain = child.attrib.get("url", "")
             elif name in ("description", "summary", "content"):
                 if not summary:
                     summary = strip_html(child.text or "")
@@ -150,14 +184,30 @@ def extract_entries(raw, feed):
                     published = parse_date(child.text or "")
         if not title:
             continue
+
+        source = feed["name"]
+        region = feed.get("region", "US")
+        if is_gnews:
+            # 실제 출처/지역은 <source>에서 파생 (config 값은 폴백).
+            if src_name:
+                source = src_name
+            region = domain_to_region(src_domain) or region
+            # 제목 끝 " - 출처" 접미사 제거: <source> 텍스트와 일치할 때만 잘라
+            # 하이픈 포함 헤드라인의 과제거를 방지한다.
+            m = _GNEWS_SUFFIX.search(title)
+            if m and (not src_name or m.group(0).strip(" -") == src_name):
+                title = title[:m.start()].strip()
+            # 구글뉴스 description은 <a> 링크일 뿐 요약이 아니다 → 비운다.
+            summary = ""
+
         entries.append({
             "title": title,
             "link": link,
             "summary": summary[:400],
             "published": published,
-            "source": feed["name"],
+            "source": source,
             "tier": feed.get("tier", 2),
-            "region": feed.get("region", "US"),
+            "region": region,
             "feed_area": feed.get("area", "economy"),
         })
     return entries
@@ -214,9 +264,24 @@ def dedupe(entries, threshold):
     return kept
 
 
-def keyword_hits(text, words):
-    text = text.lower()
-    return sum(1 for w in words if w in text)
+def compile_keyword_patterns(words):
+    """키워드 리스트를 단어경계 정규식 리스트로 사전컴파일.
+
+    substring 매칭의 오탐(ai→rain/said, oil→boiling, meta→metadata, rate→accurate)을
+    막기 위해 영숫자 경계 lookaround를 쓴다. \\b는 's&p'의 '&' 같은 비단어문자에
+    맞지 않으므로 커스텀 경계 `(?<![a-z0-9]) ... (?![a-z0-9])`를 사용한다.
+    다단어구('interest rate', 'data center')는 공백을 \\s+로 치환해 매칭한다.
+    """
+    patterns = []
+    for w in words:
+        body = re.escape(w).replace(r"\ ", r"\s+")
+        patterns.append(re.compile(r"(?<![a-z0-9])" + body + r"(?![a-z0-9])",
+                                   re.IGNORECASE))
+    return patterns
+
+
+def keyword_hits(text, patterns):
+    return sum(1 for p in patterns if p.search(text))
 
 
 def score_and_classify(entry, keywords, now):
@@ -285,7 +350,8 @@ def fmt_entry(e):
 def main():
     ap = argparse.ArgumentParser(description="RSS 기반 간밤 뉴스 수집기")
     ap.add_argument("--news-date", required=True, help="NEWS_DATE (YYYY-MM-DD)")
-    ap.add_argument("--hours", type=int, default=None, help="수집 윈도우(시간), 기본 config 값")
+    ap.add_argument("--hours", type=int, default=None,
+                    help="롤링 윈도우(시간) 강제. 미지정 시 NEWS_DATE 00:00 UTC에 고정(전일자 중복 방지)")
     default_cfg = os.path.join(os.path.dirname(os.path.abspath(__file__)), "news-feeds.json")
     ap.add_argument("--config", default=default_cfg, help="피드 설정 JSON 경로")
     args = ap.parse_args()
@@ -298,15 +364,31 @@ def main():
         return 2
 
     feeds = cfg.get("feeds", [])
-    keywords = {a: [w.lower() for w in cfg.get("keywords", {}).get(a, [])] for a in AREAS}
+    patterns = {a: compile_keyword_patterns(cfg.get("keywords", {}).get(a, [])) for a in AREAS}
     cap = int(cfg.get("per_group_cap", 8))
     threshold = float(cfg.get("dedupe_threshold", 0.72))
-    hours = args.hours if args.hours is not None else int(cfg.get("window_hours_default", 30))
 
     now = dt.datetime.now(dt.timezone.utc)
-    cutoff = now - dt.timedelta(hours=hours)
 
-    log(f"수집 시작: {len(feeds)}개 피드, 윈도우 {hours}h (cutoff {cutoff:%Y-%m-%d %H:%MZ})")
+    # 수집 윈도우.
+    #  - 기본: NEWS_DATE 00:00 UTC에 고정(전일자 중복 방지). 연속 이틀 윈도우가 겹치지 않아
+    #    롤링 30h가 미 오후 프라임타임에서 만들던 6h 재노출이 사라진다.
+    #  - --hours N 명시 시: 기존 롤링(now - N)으로 복귀(디버그용 escape hatch).
+    if args.hours is not None:
+        hours = args.hours
+        cutoff = now - dt.timedelta(hours=hours)
+        window_desc = f"롤링 {hours}h"
+    else:
+        lead = int(cfg.get("window_lead_hours", 0))
+        try:
+            nd = dt.datetime.strptime(args.news_date, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+        except ValueError:
+            log(f"--news-date 파싱 실패: {args.news_date!r} (YYYY-MM-DD)")
+            return 2
+        cutoff = nd - dt.timedelta(hours=lead)
+        window_desc = f"NEWS_DATE 고정(lead {lead}h)"
+
+    log(f"수집 시작: {len(feeds)}개 피드, 윈도우 {window_desc} (cutoff {cutoff:%Y-%m-%d %H:%MZ} ~ now {now:%Y-%m-%d %H:%MZ})")
 
     all_entries = []
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -315,8 +397,11 @@ def main():
 
     log(f"수집 합계: {len(all_entries)} items (필터 전)")
 
-    # 신선도 필터: 윈도우 내 항목만. 날짜미상은 제외(신선도 안전).
-    fresh = [e for e in all_entries if e["published"] is not None and e["published"] >= cutoff]
+    # 신선도 필터: 윈도우 [cutoff, now] 내 항목만. 날짜미상·미래일자는 제외.
+    fresh = [
+        e for e in all_entries
+        if e["published"] is not None and cutoff <= e["published"] <= now
+    ]
     log(f"윈도우 내: {len(fresh)} items")
 
     if not fresh:
@@ -326,11 +411,11 @@ def main():
     deduped = dedupe(fresh, threshold)
     log(f"중복제거 후: {len(deduped)} items")
 
-    scored = [score_and_classify(e, keywords, now) for e in deduped]
+    scored = [score_and_classify(e, patterns, now) for e in deduped]
     groups = group_entries(scored, cap)
 
     out = []
-    out.append(f"# 간밤 뉴스 후보 (NEWS_DATE={args.news_date}, 윈도우 {hours}h, 생성 {now:%Y-%m-%d %H:%MZ})")
+    out.append(f"# 간밤 뉴스 후보 (NEWS_DATE={args.news_date}, 윈도우 {window_desc}, 생성 {now:%Y-%m-%d %H:%MZ})")
     out.append(f"# 수집 {len(all_entries)} → 신선 {len(fresh)} → 중복제거 {len(deduped)} items")
     out.append("")
     total_shown = 0
