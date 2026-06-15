@@ -1,0 +1,66 @@
+name: Auto-sync archive to main
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+    paths:
+      - 'archive/**'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync archive files to main
+        run: |
+          git fetch origin main
+
+          # feature 브랜치에서 main과 다른 archive 파일 목록
+          CHANGED=$(git diff --name-only origin/main HEAD -- archive/)
+
+          if [ -z "$CHANGED" ]; then
+            echo "main과 차이 없음 — 동기화 불필요"
+            exit 0
+          fi
+
+          echo "동기화할 파일:"
+          echo "$CHANGED"
+
+          # 파일 임시 저장
+          mkdir -p /tmp/archive-sync
+          for f in $CHANGED; do
+            cp "$f" "/tmp/archive-sync/"
+          done
+
+          # main으로 전환
+          git checkout main
+          git pull origin main
+
+          # archive 파일 복사
+          for f in $CHANGED; do
+            cp "/tmp/archive-sync/$(basename $f)" "archive/$(basename $f)"
+          done
+
+          # 변경사항 없으면 종료
+          git add archive/
+          if git diff --staged --quiet; then
+            echo "커밋할 변경사항 없음"
+            exit 0
+          fi
+
+          git commit -m "Auto-sync archive from ${{ github.ref_name }}"
+          git push origin main
