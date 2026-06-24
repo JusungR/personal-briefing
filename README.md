@@ -8,6 +8,7 @@ Gmail 드래프트와 텔레그램으로 보낸다.
 | 파일 | 역할 |
 |---|---|
 | `briefing-prompt.md` | 브리핑 작성 루틴(날짜 계산, 날씨, 일정, 뉴스, 발송)의 핵심 명세. Claude가 도구로 실행한다. |
+| `template.md` | 메일 본문·텔레그램 요약의 캐노니컬 출력 형식. 형식(레이아웃) 변경은 여기서 한다. |
 | `collect-news.py` | 간밤 뉴스 수집기. 검증된 RSS 피드에서 기사를 모아 분야별 후보 목록을 출력한다. |
 | `news-feeds.json` | 뉴스 피드 목록과 키워드·점수 설정(데이터 기반, 자유롭게 편집). |
 | `gas-auto-send/Code.gs` | `[Daily Briefing]` Gmail 드래프트를 매일 자동 발송하는 Google Apps Script. |
