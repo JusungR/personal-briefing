@@ -7,6 +7,7 @@
 
 ```
 briefing-prompt.md        # 브리핑 루틴 전체 명세 (날짜 계산 → 날씨 → 일정 → 뉴스 → 경제지표 → 발송)
+template.md               # 산출물(메일 본문·텔레그램 요약) 캐노니컬 출력 형식. 형식 변경은 여기서
 collect-news.py           # RSS 기반 뉴스 수집기 (표준 라이브러리만, pip 불필요)
 news-feeds.json           # 피드 목록·키워드·점수 설정
 send_telegram.py          # 텔레그램 발송 스크립트
@@ -24,7 +25,7 @@ archive/                  # 매일 발송된 브리핑 보관 ({YYYY-MM-DD}.md)
 3. **일정** — Google Calendar `list_events`로 KST_TODAY 일정 조회
 4. **뉴스** — `python3 collect-news.py --news-date {NEWS_DATE}` 실행 → 피드 수집 → WebSearch로 상위 기사 검증. 스크립트 실패 시 WebSearch-only 폴백
 5. **경제지표** — WebSearch로 향후 7일 주요 지표 일정 조회
-6. **발송** — Gmail 드래프트 생성(`mcp__Gmail__create_draft`) + 텔레그램 요약 발송
+6. **발송** — Gmail 드래프트 생성(`mcp__Gmail__create_draft`) + 텔레그램 요약 발송. 출력 형식은 `template.md` 따름
 7. **보관** — `archive/{KST_TODAY}.md`로 커밋·푸시
 
 ## 코딩 가이드라인
