@@ -69,16 +69,18 @@ Andrej Karpathy 스타일 원칙. 이 레포를 수정할 때 반드시 따른�
 
 - 수집 윈도우는 NEWS_DATE 00:00 UTC에 고정 (전일자 중복 방지). `--hours`는 디버그용.
 - 키워드 매칭은 **단어경계** 기반이다. substring 매칭으로 바꾸지 않는다 (`ai`→rain 오탐 방지).
+- `exclude_keywords`에 걸린 기사는 수집 단계에서 버린다(스포츠·연예). 미설정이면 무동작.
 - 종료 코드: `0` 정상, `1` 기사 0건(WebSearch 폴백), `2` 설정 로드 실패.
 - 일부 피드 실패 → 해당 피드만 건너뛰고 계속 진행. 브리핑은 절대 거르지 않는다.
 
 ### 피드 설정 (news-feeds.json)
 
-- `area`: `economy` | `markets` | `ai_tech`
+- `area`: `economy` | `markets` | `ai_tech` | `politics`
 - `tier`: `1` (주요 1차 출처) | `2`
 - `region`: `US` | `EU` | `GLOBAL`
 - `type: "gnews"` → Google News RSS 간접 수집 (직접 접근 불가 출처용)
-- 직접 접근 불가 출처: Reuters, FT, Guardian, NYT, The Verge, Ars Technica → Google News로 우회
+- 직접 접근 불가 출처: Reuters, FT, NYT, The Verge, Ars Technica, AP → Google News로 우회
+- Guardian은 섹션 RSS(`world/europe-news`, `us-news`)만 직접 접근되고, 비즈니스는 gnews로 받는다
 
 ### 시크릿 관리
 

@@ -61,7 +61,7 @@ Bash로 뉴스 수집 스크립트를 실행해 분야별 후보 목록을 받�
 python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE}
 ```
 
-- stdout에 `AI/TECH · ECONOMY · MARKETS · OTHER MAJOR` 그룹별로 점수순 후보가 출력된다.
+- stdout에 `AI/TECH · ECONOMY · MARKETS · POLITICS · OTHER MAJOR` 그룹별로 점수순 후보가 출력된다.
   각 항목은 `[score | 출처(+N 매체) | 지역 | 시각]`, 헤드라인, 요약, url 형식.
 - 수집 윈도우는 **NEWS_DATE 00:00 UTC에 고정**돼 있어, 전날 브리핑에 나간 기사가
   다시 후보로 올라오지 않는다(전일자 중복 방지). 별도 `--hours`는 지정하지 않는다.
@@ -73,7 +73,7 @@ python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE}
 1. **분야별 선별 (기술·경제·정치)**: 후보를 세 분야로 묶어 각 **3~5건** 고른다.
    점수가 높고 여러 매체가 함께 보도한(`+N 매체`) 기사를 우선한다.
    - 분야 매핑: 기술 ← `AI/TECH`, 경제 ← `ECONOMY`+`MARKETS`,
-     정치 ← `OTHER MAJOR`의 지정학·정치 헤드라인.
+     정치 ← `POLITICS` (부족하면 `OTHER MAJOR`의 지정학·정치 헤드라인으로 보완).
    - 가십·연예·스포츠 제외. (지역 캡 없음 — 미·유럽 뉴스를 분야로만 묶는다.)
 2. **신선도·정확도**: 각 후보의 시각이 NEWS_DATE 윈도우 안인지 확인하고, 오래되거나
    어긋나는 항목은 버린다. 상위 2~3개 핵심 기사는 **WebSearch로 사실·최신 전개를 확인**한다.
