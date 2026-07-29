@@ -24,3 +24,4 @@ release_date,release_time_kst,country,indicator,period,actual,forecast,previous,
 2026-07-16,21:30,US,소매판매,2026-06,+0.2%,+0.3%,,Census
 2026-07-22,15:00,UK,CPI,2026-06,+2.6%,,+2.8%,ONS
 2026-07-23,21:15,EU,ECB 기준금리,2026-07,2.25%,2.25%,2.25%,ECB
+2026-07-29,03:00,US,FOMC 기준금리,2026-07,3.50~3.75%,3.50~3.75%,3.50~3.75%,Reuters
