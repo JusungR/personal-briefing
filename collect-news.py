@@ -43,11 +43,14 @@ HEADERS = {
     "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
 }
 TIMEOUT = 15
-AREAS = ("economy", "markets", "ai_tech")
+# politics는 맨 뒤에 둔다: score_and_classify의 max()는 동점 시 첫 원소를 반환하므로,
+# 관세·무역처럼 경제/정치 키워드가 함께 걸리는 기사가 기존 분야에 남는다.
+AREAS = ("economy", "markets", "ai_tech", "politics")
 AREA_LABEL = {
     "economy": "ECONOMY (경제)",
     "markets": "MARKETS (시장)",
     "ai_tech": "AI / TECH (기술)",
+    "politics": "POLITICS (정치)",
     "other_major": "OTHER MAJOR (기타 주요)",
 }
 
@@ -67,6 +70,7 @@ _DOMAIN_REGION = {
     "nytimes.com": "US",
     "theverge.com": "US",
     "arstechnica.com": "US",
+    "apnews.com": "US",
 }
 _STOPWORDS = {
     "the", "a", "an", "of", "to", "in", "on", "for", "and", "as", "at",
@@ -404,6 +408,14 @@ def main():
     ]
     log(f"윈도우 내: {len(fresh)} items")
 
+    exclude = compile_keyword_patterns(cfg.get("exclude_keywords", []))
+    before_exclude = len(fresh)
+    fresh = [
+        e for e in fresh
+        if not keyword_hits(e["title"] + " " + e["summary"], exclude)
+    ]
+    log(f"스포츠·가십 제외: {before_exclude - len(fresh)} items")
+
     if not fresh:
         log("사용 가능한 신선한 기사 0건 → 프롬프트는 WebSearch로 폴백해야 함")
         return 1
@@ -419,7 +431,7 @@ def main():
     out.append(f"# 수집 {len(all_entries)} → 신선 {len(fresh)} → 중복제거 {len(deduped)} items")
     out.append("")
     total_shown = 0
-    for key in ("ai_tech", "economy", "markets", "other_major"):
+    for key in ("ai_tech", "economy", "markets", "politics", "other_major"):
         items = groups.get(key, [])
         out.append(f"=== FOCUS: {AREA_LABEL[key]} — {len(items)}건 ===")
         if not items:

@@ -61,7 +61,7 @@ Bash로 뉴스 수집 스크립트를 실행해 분야별 후보 목록을 받�
 python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE}
 ```
 
-- stdout에 `AI/TECH · ECONOMY · MARKETS · OTHER MAJOR` 그룹별로 점수순 후보가 출력된다.
+- stdout에 `AI/TECH · ECONOMY · MARKETS · POLITICS · OTHER MAJOR` 그룹별로 점수순 후보가 출력된다.
   각 항목은 `[score | 출처(+N 매체) | 지역 | 시각]`, 헤드라인, 요약, url 형식.
 - 수집 윈도우는 **NEWS_DATE 00:00 UTC에 고정**돼 있어, 전날 브리핑에 나간 기사가
   다시 후보로 올라오지 않는다(전일자 중복 방지). 별도 `--hours`는 지정하지 않는다.
@@ -73,7 +73,7 @@ python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE}
 1. **분야별 선별 (기술·경제·정치)**: 후보를 세 분야로 묶어 각 **3~5건** 고른다.
    점수가 높고 여러 매체가 함께 보도한(`+N 매체`) 기사를 우선한다.
    - 분야 매핑: 기술 ← `AI/TECH`, 경제 ← `ECONOMY`+`MARKETS`,
-     정치 ← `OTHER MAJOR`의 지정학·정치 헤드라인.
+     정치 ← `POLITICS` (부족하면 `OTHER MAJOR`의 지정학·정치 헤드라인으로 보완).
    - 가십·연예·스포츠 제외. (지역 캡 없음 — 미·유럽 뉴스를 분야로만 묶는다.)
 2. **신선도·정확도**: 각 후보의 시각이 NEWS_DATE 윈도우 안인지 확인하고, 오래되거나
    어긋나는 항목은 버린다. 상위 2~3개 핵심 기사는 **WebSearch로 사실·최신 전개를 확인**한다.
@@ -96,9 +96,61 @@ python3 /home/user/personal-briefing/collect-news.py --news-date {NEWS_DATE}
 
 ---
 
-## 4. 이번 주 주요 경제지표 일정
+## 4. 경제지표 (지난 7일 실적 + 향후 7일 일정)
 
-**KST_TODAY** 기준 향후 7일 내에 발표될 한국·미국·유럽·글로벌 주요 경제지표를 WebSearch로 조회한다.
+범위는 **KST_TODAY - 7일 ~ KST_TODAY + 7일**이다. 지난 7일은 이미 발표된 **실제치**를,
+향후 7일은 아직 안 나온 **일정**을 다룬다.
+
+→ 출력 레이아웃: `template.md` **A-5 경제지표 블록**.
+
+### 4-1. 지난 7일 실제치 수집
+
+WebSearch로 **KST_TODAY-7일 ~ KST_TODAY** 사이에 발표된 핵심 지표의 결과를 조회한다.
+대상은 `indicators.py`의 watchlist 지표(미국·한국·유로존·영국·일본의 CPI·PCE·PPI·
+고용·GDP·소매판매·PMI·기준금리)로 한정한다.
+
+**검색 쿼리 예시:**
+```
+US CPI actual vs forecast {지난주 범위}
+economic calendar results last week {KST_TODAY}
+{국가} {지표명} 발표 결과 예상치
+```
+
+### 4-2. 아카이브 기록
+
+실제치가 확정된 것만 `indicators.py record`로 기록한다. **발표 전 일정은 넣지 않는다.**
+
+```bash
+python3 /home/user/personal-briefing/indicators.py record <<'EOF'
+{release_date},{HH:MM},{country},{indicator},{period},{actual},{forecast},{previous},{source}
+EOF
+```
+
+- 필드 순서: `release_date,release_time_kst,country,indicator,period,actual,forecast,previous,source`
+  (`release_date`는 KST 발표일 `YYYY-MM-DD`, `period`는 대상 기간 `2026-06` 또는 `2026Q2`)
+- `country`/`indicator`는 **watchlist 표준명**이어야 한다. 틀리면 해당 행만 거부되고
+  stderr에 유효 목록이 출력되므로 그걸 보고 고친다.
+- 7일 윈도우가 매일 겹치지만 스크립트가 키 `(release_date, country, indicator, period)`로
+  upsert하므로 **그대로 다시 넣어도 안전하다**. 속보치가 확정치로 바뀌면 값만 갱신된다.
+- 이 단계는 best-effort다. 실패해도 브리핑은 계속 진행한다.
+
+### 4-3. 「지난주 발표」 렌더링
+
+기록된 내용을 다시 읽어 렌더링한다. 오늘 검색에서 놓친 항목도 이전에 기록됐다면
+포함되므로, CSV가 이 섹션의 단일 진실 원천이다.
+
+```bash
+python3 /home/user/personal-briefing/indicators.py show --since {KST_TODAY-7일} --until {KST_TODAY}
+```
+
+- 출력 각 행을 A-5 「▸ 지난주 발표」 형식으로 옮긴다.
+- **상회/부합/하회 판단은 여기서 붙인다** (스크립트는 판정하지 않는다).
+- exit 1(기록 없음)이면 `기록된 발표 없음` 한 줄만 둔다.
+
+### 4-4. 향후 7일 일정
+
+**KST_TODAY** 기준 향후 7일 내 발표 예정인 한국·미국·유럽·글로벌 주요 지표를
+WebSearch로 조회한다. **미래 일정은 CSV에 저장하지 않는다** (매일 바뀌므로).
 
 **검색 쿼리 예시:**
 ```
@@ -118,8 +170,6 @@ economic calendar this week {KST_TODAY} Korea US EU
 - 예상치·이전치가 없으면 생략해도 된다.
 - 발표 일정이 없는 날은 출력하지 않는다.
 - 조회 결과가 불확실하면 "일정 미확인"으로 표기하고 넘어간다(브리핑 전체에 영향 없음).
-
-→ 출력 레이아웃: `template.md` **A-5 경제지표 블록**.
 
 ---
 
@@ -187,11 +237,13 @@ EOF
 
 ```bash
 cd /home/user/personal-briefing
-git add archive/{KST_TODAY}.md
+git add archive/{KST_TODAY}.md archive/indicators.csv
 git commit -m "Archive daily briefing {KST_TODAY}"
 git push -u origin HEAD || (sleep 2 && git push -u origin HEAD)
 ```
 
 - 커밋 메시지는 위 형식을 따른다.
+- Section 4-2에서 갱신된 `archive/indicators.csv`도 함께 커밋한다. 변경이 없으면
+  `git add`는 아무 일도 하지 않으므로 그대로 둔다.
 - 푸시가 네트워크 오류로 실패하면 몇 차례 재시도하되, 끝내 실패해도 브리핑 자체는
   완료된 것으로 간주한다.

@@ -1,12 +1,14 @@
 {
-  "_comment": "검증된 LIVE RSS 피드만 등록. 직접 접근이 막힌 1차 출처(Reuters, FT, Guardian, NYT, The Verge, Ars Technica)는 type:\"gnews\" 항목으로 Google News RSS를 통해 간접 복구한다(실제 출처/지역은 항목별 <source>에서 파생; name/region은 폴백). area: economy|markets|ai_tech, tier: 1=주요 1차 출처, region: US|EU|GLOBAL.",
+  "_comment": "검증된 LIVE RSS 피드만 등록. 직접 접근이 막힌 1차 출처(Reuters, FT, NYT, The Verge, Ars Technica, AP)는 type:\"gnews\" 항목으로 Google News RSS를 통해 간접 복구한다(실제 출처/지역은 항목별 <source>에서 파생; name/region은 폴백). Guardian은 섹션 RSS(world/europe-news, us-news)는 직접 접근되나 비즈니스 커버리지는 gnews로 유지한다. area: economy|markets|ai_tech|politics, tier: 1=주요 1차 출처, region: US|EU|GLOBAL. exclude_keywords에 걸린 기사는 수집 단계에서 버린다(스포츠·연예).",
   "window_lead_hours": 0,
   "per_group_cap": 8,
   "dedupe_threshold": 0.72,
+  "exclude_keywords": ["world cup", "fifa", "uefa", "olympics", "olympic", "nba", "nfl", "mlb", "premier league", "soccer", "football", "tennis", "golf", "boxing", "grammy", "oscars", "box office", "celebrity", "red carpet"],
   "keywords": {
     "economy": ["inflation", "cpi", "pce", "gdp", "jobs", "payroll", "payrolls", "unemployment", "rate", "rates", "interest rate", "fed", "federal reserve", "ecb", "central bank", "tariff", "trade", "recession", "deficit", "budget", "stimulus", "growth", "consumer"],
     "markets": ["stocks", "stock", "s&p", "nasdaq", "dow", "bond", "bonds", "yield", "yields", "oil", "gold", "earnings", "ipo", "dollar", "treasury", "ftse", "dax", "shares", "equities", "futures", "crypto", "bitcoin", "rally", "selloff"],
-    "ai_tech": ["ai", "artificial intelligence", "openai", "anthropic", "nvidia", "chip", "chips", "semiconductor", "model", "llm", "google", "microsoft", "meta", "apple", "amazon", "datacenter", "data center", "cloud", "startup", "robot", "robotics", "gpu", "chatgpt", "gemini", "agent"]
+    "ai_tech": ["ai", "artificial intelligence", "openai", "anthropic", "nvidia", "chip", "chips", "semiconductor", "model", "llm", "google", "microsoft", "meta", "apple", "amazon", "datacenter", "data center", "cloud", "startup", "robot", "robotics", "gpu", "chatgpt", "gemini", "agent"],
+    "politics": ["election", "elections", "vote", "voters", "referendum", "parliament", "senate", "congress", "president", "prime minister", "chancellor", "cabinet", "coalition", "sanctions", "sanction", "treaty", "summit", "diplomacy", "diplomatic", "ceasefire", "peace talks", "war", "military", "troops", "airstrike", "nato", "eu", "brussels", "kremlin", "ukraine", "russia", "israel", "gaza", "iran", "immigration", "border", "protest", "protests", "resign", "impeachment", "geopolitical"]
   },
   "feeds": [
     {"name": "CNBC Top News",    "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "area": "economy",  "tier": 1, "region": "US"},
@@ -33,6 +35,12 @@
     {"name": "GNews NYT Business",    "type": "gnews", "area": "economy", "tier": 1, "region": "US",     "url": "https://news.google.com/rss/search?q=when:1d%20business%20site:nytimes.com&hl=en-US&gl=US&ceid=US:en"},
     {"name": "GNews The Verge",       "type": "gnews", "area": "ai_tech", "tier": 2, "region": "US",     "url": "https://news.google.com/rss/search?q=when:1d%20site:theverge.com&hl=en-US&gl=US&ceid=US:en"},
     {"name": "GNews Ars Technica",    "type": "gnews", "area": "ai_tech", "tier": 2, "region": "US",     "url": "https://news.google.com/rss/search?q=when:1d%20site:arstechnica.com&hl=en-US&gl=US&ceid=US:en"},
-    {"name": "GNews AI Topic",        "type": "gnews", "area": "ai_tech", "tier": 2, "region": "GLOBAL", "url": "https://news.google.com/rss/search?q=when:1d%20artificial%20intelligence&hl=en-US&gl=US&ceid=US:en"}
+    {"name": "GNews AI Topic",        "type": "gnews", "area": "ai_tech", "tier": 2, "region": "GLOBAL", "url": "https://news.google.com/rss/search?q=when:1d%20artificial%20intelligence&hl=en-US&gl=US&ceid=US:en"},
+
+    {"name": "Guardian Europe",  "url": "https://www.theguardian.com/world/europe-news/rss", "area": "politics", "tier": 1, "region": "EU"},
+    {"name": "Guardian US",      "url": "https://www.theguardian.com/us-news/rss",           "area": "politics", "tier": 1, "region": "US"},
+    {"name": "DW Europe",        "url": "https://rss.dw.com/rdf/rss-en-eu",                  "area": "politics", "tier": 2, "region": "EU"},
+    {"name": "France24 Europe",  "url": "https://www.france24.com/en/europe/rss",            "area": "politics", "tier": 2, "region": "EU"},
+    {"name": "GNews AP World",   "type": "gnews", "area": "politics", "tier": 1, "region": "US", "url": "https://news.google.com/rss/search?q=when:1d%20site:apnews.com%20world%20OR%20politics&hl=en-US&gl=US&ceid=US:en"}
   ]
 }

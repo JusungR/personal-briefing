@@ -11,6 +11,8 @@ Gmail 드래프트와 텔레그램으로 보낸다.
 | `template.md` | 메일 본문·텔레그램 요약의 캐노니컬 출력 형식. 형식(레이아웃) 변경은 여기서 한다. |
 | `collect-news.py` | 간밤 뉴스 수집기. 검증된 RSS 피드에서 기사를 모아 분야별 후보 목록을 출력한다. |
 | `news-feeds.json` | 뉴스 피드 목록과 키워드·점수 설정(데이터 기반, 자유롭게 편집). |
+| `indicators.py` | 주요 경제지표(CPI·PCE·기준금리 등)의 발표 실제치를 시계열로 누적·조회. |
+| `archive/indicators.csv` | 위 스크립트가 관리하는 지표 실적 시계열(한 줄 = 한 발표). |
 | `gas-auto-send/Code.gs` | `[Daily Briefing]` Gmail 드래프트를 매일 자동 발송하는 Google Apps Script. |
 | `archive/` | 매일 발송된 브리핑 본문(`{날짜}.md`)을 누적 보관(향후 리뷰·개선용). |
 
@@ -87,3 +89,35 @@ lookaround로 매칭해 `s&p`·`interest rate` 같은 특수문자/다단어구�
 
 발송된 브리핑은 매일 `archive/{KST_TODAY}.md`로 git 커밋해 누적 보관한다
 (`briefing-prompt.md` Section 6). 향후 분야 균형·출처 다양성·중복 패턴 리뷰의 입력으로 쓴다.
+
+## 경제지표 아카이브 (indicators.py)
+
+브리핑의 지표 블록은 원래 **미래 일정만** 담아, 발표 후 결과가 어땠는지는 남지 않았다
+(아카이브 55일치에서 "실제" 언급 3회). 지표명 표기도 날마다 갈려("미국 CPI" /
+"5월 소비자물가지수(CPI)") 시계열을 만들 수 없었다. 이를 위해 **발표된 실제치만**
+표준명으로 `archive/indicators.csv`에 누적한다.
+
+```bash
+# 기록 (stdin, 헤더 없는 CSV). 같은 발표를 다시 넣으면 값만 갱신된다.
+python3 indicators.py record <<'EOF'
+2026-07-29,03:00,US,FOMC 기준금리,2026-07,3.50~3.75%,3.50~3.75%,3.50~3.75%,Reuters
+EOF
+
+# 조회 (브리핑의 '지난주 발표' 렌더링용)
+python3 indicators.py show --since 2026-07-22 --until 2026-07-29
+```
+
+- **스키마**: `release_date,release_time_kst,country,indicator,period,actual,forecast,previous,source`
+- **upsert 키**: `(release_date, country, indicator, period)` — 매일 겹치는 7일 윈도우를
+  그대로 다시 넣어도 중복이 쌓이지 않는다. 속보치가 확정치로 바뀌면 값만 갱신된다.
+- **표준명 강제**: `country`/`indicator`가 스크립트의 `WATCHLIST`에 없으면 해당 행을
+  거부하고 유효 목록을 알려준다. 시계열이 표기 변이로 끊기는 걸 막는다.
+- **미래 일정은 저장하지 않는다** — `actual`이 비면 거부된다. 일정은 매일 바뀌므로
+  보존 가치가 없다.
+- 수치는 단위가 이질적이라(`+3.5%`, `216K`, `3.50~3.75%`) 문자열 그대로 저장한다.
+- **요구사항**: `python3`(표준 라이브러리만). **종료 코드**: `0` 정상, `1` 유효 행/조회
+  결과 0건, `2` 입출력·인자 오류.
+
+> CSV를 `archive/` 아래 두는 건 의도적이다. `sync-archive-to-main.yml`은 `archive/**`만
+> main으로 동기화하고 일일 브리핑은 PR을 만들지 않으므로, 레포 루트에 두면 main에
+> 반영되지 않는다.

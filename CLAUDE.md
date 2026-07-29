@@ -10,9 +10,11 @@ briefing-prompt.md        # 브리핑 루틴 전체 명세 (날짜 계산 → �
 template.md               # 산출물(메일 본문·텔레그램 요약) 캐노니컬 출력 형식. 형식 변경은 여기서
 collect-news.py           # RSS 기반 뉴스 수집기 (표준 라이브러리만, pip 불필요)
 news-feeds.json           # 피드 목록·키워드·점수 설정
+indicators.py             # 주요 경제지표 실적 아카이브 (record/show, 표준 라이브러리만)
 send_telegram.py          # 텔레그램 발송 스크립트
 gas-auto-send/Code.gs     # Gmail 드래프트 자동 발송 Google Apps Script
 archive/                  # 매일 발송된 브리핑 보관 ({YYYY-MM-DD}.md)
+archive/indicators.csv    # 경제지표 실적 시계열 (indicators.py가 관리)
 .github/workflows/
   auto-merge-claude.yml   # claude/ 브랜치 PR 자동 스쿼시 머지
   sync-archive-to-main.yml # claude/ 브랜치의 archive/ 변경을 main에 자동 동기화
@@ -24,9 +26,9 @@ archive/                  # 매일 발송된 브리핑 보관 ({YYYY-MM-DD}.md)
 2. **날씨** — WebSearch로 서울 날씨 조회
 3. **일정** — Google Calendar `list_events`로 KST_TODAY 일정 조회
 4. **뉴스** — `python3 collect-news.py --news-date {NEWS_DATE}` 실행 → 피드 수집 → WebSearch로 상위 기사 검증. 스크립트 실패 시 WebSearch-only 폴백
-5. **경제지표** — WebSearch로 향후 7일 주요 지표 일정 조회
+5. **경제지표** — 전후 1주일. 지난 7일 실제치를 WebSearch로 모아 `indicators.py record`로 기록하고, `indicators.py show`로 되읽어 렌더링. 향후 7일 일정은 WebSearch로 조회(저장하지 않음)
 6. **발송** — Gmail 드래프트 생성(`mcp__Gmail__create_draft`) + 텔레그램 요약 발송. 출력 형식은 `template.md` 따름
-7. **보관** — `archive/{KST_TODAY}.md`로 커밋·푸시
+7. **보관** — `archive/{KST_TODAY}.md` + `archive/indicators.csv` 커밋·푸시
 
 ## 코딩 가이드라인
 
@@ -62,23 +64,25 @@ Andrej Karpathy 스타일 원칙. 이 레포를 수정할 때 반드시 따른�
 
 ### 의존성
 
-- `collect-news.py`는 **Python 표준 라이브러리만** 사용한다. pip 패키지를 추가하지 않는다.
+- `collect-news.py`와 `indicators.py`는 **Python 표준 라이브러리만** 사용한다. pip 패키지를 추가하지 않는다.
 - `send_telegram.py`만 `requests`를 사용한다.
 
 ### 뉴스 수집 (collect-news.py)
 
 - 수집 윈도우는 NEWS_DATE 00:00 UTC에 고정 (전일자 중복 방지). `--hours`는 디버그용.
 - 키워드 매칭은 **단어경계** 기반이다. substring 매칭으로 바꾸지 않는다 (`ai`→rain 오탐 방지).
+- `exclude_keywords`에 걸린 기사는 수집 단계에서 버린다(스포츠·연예). 미설정이면 무동작.
 - 종료 코드: `0` 정상, `1` 기사 0건(WebSearch 폴백), `2` 설정 로드 실패.
 - 일부 피드 실패 → 해당 피드만 건너뛰고 계속 진행. 브리핑은 절대 거르지 않는다.
 
 ### 피드 설정 (news-feeds.json)
 
-- `area`: `economy` | `markets` | `ai_tech`
+- `area`: `economy` | `markets` | `ai_tech` | `politics`
 - `tier`: `1` (주요 1차 출처) | `2`
 - `region`: `US` | `EU` | `GLOBAL`
 - `type: "gnews"` → Google News RSS 간접 수집 (직접 접근 불가 출처용)
-- 직접 접근 불가 출처: Reuters, FT, Guardian, NYT, The Verge, Ars Technica → Google News로 우회
+- 직접 접근 불가 출처: Reuters, FT, NYT, The Verge, Ars Technica, AP → Google News로 우회
+- Guardian은 섹션 RSS(`world/europe-news`, `us-news`)만 직접 접근되고, 비즈니스는 gnews로 받는다
 
 ### 시크릿 관리
 
@@ -91,6 +95,23 @@ Andrej Karpathy 스타일 원칙. 이 레포를 수정할 때 반드시 따른�
 - 파일 경로: `archive/{KST_TODAY}.md`
 - Gmail 드래프트 본문 그대로 저장 (텔레그램 요약본이 아닌 상세 버전).
 - 커밋 메시지: `Archive daily briefing {KST_TODAY}`
+
+### 경제지표 아카이빙 (indicators.py)
+
+- 저장 위치는 **`archive/indicators.csv`로 고정**한다. 레포 루트로 옮기지 않는다 —
+  `sync-archive-to-main.yml`이 `archive/**`만 main에 동기화하고 일일 브리핑은 PR을
+  만들지 않으므로, 루트에 두면 main에 영원히 반영되지 않는다.
+- **발표가 끝나 실제치가 확정된 것만** 기록한다. 미래 일정은 매일 바뀌므로 저장하지
+  않는다 (`actual`이 비면 스크립트가 해당 행을 거부한다).
+- `country`·`indicator`는 스크립트의 `WATCHLIST` 표준명만 허용한다. 시계열이 끊기지
+  않게 하려는 것이므로 임의 표기를 넣지 않는다. 지표를 늘리려면 `WATCHLIST`에 추가한다.
+- upsert 키는 `(release_date, country, indicator, period)`. 매일 겹치는 7일 윈도우를
+  그대로 다시 넣어도 중복이 쌓이지 않는다. 같은 키의 값이 바뀌면 갱신된다(속보치→확정치).
+- 수치는 단위가 이질적이므로(`+3.5%`, `216K`, `3.50~3.75%`) **문자열 그대로** 저장한다.
+  파싱 레이어를 만들지 않는다.
+- 상회/부합/하회 판정은 스크립트가 하지 않는다. 브리핑이 렌더링할 때 판단한다.
+- 종료 코드: `0` 정상, `1` 유효 행/조회 결과 0건, `2` 입출력·인자 오류.
+  기록 실패는 best-effort로 취급하고 브리핑은 계속한다.
 
 ### Git 브랜치 전략
 
