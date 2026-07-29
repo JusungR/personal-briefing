@@ -28,12 +28,24 @@ jobs:
       - name: Sync archive files to main
         run: |
           git fetch origin main
+          BASE=$(git merge-base origin/main HEAD)
 
-          # feature 브랜치에서 main과 다른 archive 파일 목록
-          CHANGED=$(git diff --name-only origin/main HEAD -- archive/)
+          # archive/ 외 변경이 섞여 있으면 코드 작업 브랜치다 → 자동 동기화하지 않고
+          # PR 리뷰를 거치게 둔다. 일일 브리핑은 archive/{날짜}.md 와
+          # archive/indicators.csv 만 커밋하므로 여기 걸리지 않는다.
+          OTHER=$(git diff --name-only "$BASE" HEAD -- . ':(exclude)archive/')
+          if [ -n "$OTHER" ]; then
+            echo "archive/ 외 변경이 있어 자동 동기화를 건너뜁니다 — PR로 처리하세요:"
+            echo "$OTHER"
+            exit 0
+          fi
+
+          # 이 브랜치가 실제로 바꾼 archive 파일만 고른다. origin/main 기준으로 비교하면
+          # 브랜치가 뒤처졌을 때 main의 최신 파일까지 목록에 들어와 구버전으로 덮어쓴다.
+          CHANGED=$(git diff --name-only "$BASE" HEAD -- archive/)
 
           if [ -z "$CHANGED" ]; then
-            echo "main과 차이 없음 — 동기화 불필요"
+            echo "archive 변경 없음 — 동기화 불필요"
             exit 0
           fi
 
