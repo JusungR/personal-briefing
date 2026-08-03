@@ -123,10 +123,6 @@ def validate(values, lineno):
         log(f"  skip L{lineno}: {row['country']}의 알 수 없는 indicator {row['indicator']!r}")
         log(f"         유효: {', '.join(WATCHLIST[row['country']])}")
         return None
-    # 미래 일정은 저장하지 않는다 — 실제 발표값이 있어야 시계열이 된다.
-    if not any(row[f] for f in VALUE_FIELDS):
-        log(f"  skip L{lineno}: level·yoy·mom이 모두 비었다 (발표 전 일정은 기록하지 않는다)")
-        return None
     return row
 
 
@@ -143,13 +139,22 @@ def cmd_record(args):
             continue
         key = tuple(row[k] for k in KEY)
         if key in index:
-            if index[key] == row:
+            # 값이 있는 칸만 반영한다. 전체를 덮어쓰면 빈 칸 하나를 채우려고 부분 행을
+            # 넣었을 때 나머지가 지워진다(나중에 지수 원계열만 알게 되는 경우가 그렇다).
+            incoming = {k: v for k, v in row.items() if v}
+            if all(index[key].get(k) == v for k, v in incoming.items()):
                 unchanged += 1
             else:
-                index[key].update(row)
+                index[key].update(incoming)
                 updated += 1
                 log(f"  갱신 {row['release_date']} {row['country']} {row['indicator']}")
         else:
+            # 새 행은 실제 발표값이 있어야 한다 — 발표 전 일정을 저장하지 않기 위해서다.
+            # 기존 행에 예상치·이전치만 덧붙이는 건 보강이므로 이 검사에 걸리지 않는다.
+            if not any(row[f] for f in VALUE_FIELDS):
+                log(f"  skip L{lineno}: level·yoy·mom이 모두 빈 신규 행 "
+                    f"(발표 전 일정은 기록하지 않는다)")
+                continue
             index[key] = row
             rows.append(row)
             added += 1
