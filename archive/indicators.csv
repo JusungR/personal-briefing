@@ -31,3 +31,4 @@ release_date,release_time_kst,country,indicator,period,actual,forecast,previous,
 2026-07-30,21:30,US,PCE 물가,2026-06,3.7%,3.7%,4.1%,BEA
 2026-07-30,21:30,US,근원 PCE,2026-06,3.3%,3.3%,,BEA
 2026-07-31,17:00,EU,HICP,2026-07,+2.9%,+2.9%,+2.8%,Eurostat
+2026-08-03,23:00,US,ISM 제조업 PMI,2026-07,55.6,54.0,53.3,ISM
