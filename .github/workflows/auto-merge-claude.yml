@@ -12,8 +12,20 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # archive/ 만 바뀐 PR(일일 브리핑 보관)만 자동 머지한다.
+      # 코드·설정 변경이 섞이면 사람이 리뷰하도록 열어 둔다.
       - name: Merge PR into main
-        run: gh pr merge "$PR_NUMBER" --squash --subject "Daily briefing auto-merge" --delete-branch
+        run: |
+          # 두 단계로 나눈다. 한 줄로 이으면 gh 실패 시 뒤의 `|| true`가 오류를
+          # 삼켜 OTHER가 비고, 확인 없이 머지된다.
+          FILES=$(gh pr diff "$PR_NUMBER" --name-only)
+          OTHER=$(printf '%s\n' "$FILES" | grep -v '^archive/' || true)
+          if [ -n "$OTHER" ]; then
+            echo "archive/ 외 변경이 있어 자동 머지를 건너뜁니다 — 리뷰 후 수동 머지하세요:"
+            echo "$OTHER"
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" --squash --subject "Daily briefing auto-merge" --delete-branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
