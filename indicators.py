@@ -10,18 +10,19 @@ CSV를 archive/ 아래 두는 이유: .github/workflows/sync-archive-to-main.yml
 
 외부 의존성 없음 — Python 표준 라이브러리만 사용한다.
 
-발표값은 level(원계열)·yoy(전년비)·mom(전월비) 세 칸에 나눠 담는다. 브리핑은 보통
-yoy/mom만 쓰지만 지수 원계열도 함께 남겨야 나중에 재계산·검증이 가능하다.
-셋 중 지표에 해당하는 것만 채우면 되고, 브리핑이 어느 칸을 헤드라인으로 쓸지는
+발표값은 level(원계열)·yoy(전년비)·qoq(전분기비 연율)·mom(전월비) 칸에 나눠
+담는다. 브리핑은 보통 yoy/mom만 쓰지만 지수 원계열도 함께 남겨야 나중에
+재계산·검증이 가능하다.
+지표에 해당하는 칸만 채우면 되고, 브리핑이 어느 칸을 헤드라인으로 쓸지는
 WATCHLIST가 정한다.
 
 사용 예:
     # 기록 (stdin, 헤더 없는 CSV 행). 같은 키를 다시 넣으면 값이 갱신된다.
     #   country,indicator,release_date,release_time_kst,period,
-    #   level,yoy,mom,forecast,previous,source
+    #   level,yoy,qoq,mom,forecast,previous,source
     python3 indicators.py record <<'EOF'
-    US,CPI,2026-07-14,21:30,2026-06,325.4,+3.5%,-0.4%,+3.8%,+4.2%,BLS
-    US,FOMC 기준금리,2026-07-29,03:00,2026-07,3.50~3.75%,,,3.50~3.75%,3.50~3.75%,Reuters
+    US,CPI,2026-07-14,21:30,2026-06,325.4,+3.5%,,-0.4%,+3.8%,+4.2%,BLS
+    US,FOMC 기준금리,2026-07-30,03:00,2026-07,3.50~3.75%,,,,3.50~3.75%,3.50~3.75%,Fed
     EOF
 
     # 조회 — 기간(브리핑의 '지난주 발표' 렌더링용)
@@ -46,26 +47,27 @@ import sys
 # 파일을 그냥 열어도 같은 지표가 연속 블록으로 보인다.
 FIELDS = [
     "country", "indicator", "release_date", "release_time_kst", "period",
-    "level", "yoy", "mom", "forecast", "previous", "source",
+    "level", "yoy", "qoq", "mom", "forecast", "previous", "source",
 ]
 # 같은 발표를 식별하는 키. 재기록 시 이 키가 같으면 덮어쓴다(속보치→확정치 갱신).
 KEY = ("country", "indicator", "release_date", "period")
-# 발표값을 담는 칸. 셋 중 최소 하나는 있어야 기록된다.
-VALUE_FIELDS = ("level", "yoy", "mom")
+# 발표값을 담는 칸. 신규 행은 이 중 최소 하나가 있어야 기록된다.
+VALUE_FIELDS = ("level", "yoy", "qoq", "mom")
 
 # 시계열이 끊기지 않으려면 같은 지표가 항상 같은 이름이어야 한다.
 # 아카이브에서 "미국 CPI" / "미국 5월 CPI" / "5월 소비자물가지수(CPI)" 처럼
 # 표기가 갈렸던 문제를 막기 위해 표준명을 강제한다.
 #
 # 값은 브리핑이 헤드라인으로 쓰는 칸이다. 지표마다 관례가 다르다 —
-# 물가는 전년비(yoy), 고용·소매판매는 전월 증감(mom), 금리·PMI는 수준(level).
+# 물가는 전년비(yoy), 고용·소매판매는 전월 증감(mom), 금리·PMI는 수준(level),
+# 미국·유로존 GDP는 전분기비 연율(qoq). 한국 GDP는 관례가 전분기비라 같은 칸을 쓴다.
 WATCHLIST = {
     "US": {"CPI": "yoy", "근원 CPI": "yoy", "PCE 물가": "yoy", "근원 PCE": "yoy",
-           "PPI": "yoy", "비농업고용": "mom", "실업률": "level", "GDP": "yoy",
+           "PPI": "yoy", "비농업고용": "mom", "실업률": "level", "GDP": "qoq",
            "소매판매": "mom", "ISM 제조업 PMI": "level", "ISM 서비스업 PMI": "level",
            "FOMC 기준금리": "level"},
-    "KR": {"CPI": "yoy", "기준금리": "level", "GDP": "yoy"},
-    "EU": {"HICP": "yoy", "ECB 기준금리": "level", "GDP": "yoy"},
+    "KR": {"CPI": "yoy", "기준금리": "level", "GDP": "qoq"},
+    "EU": {"HICP": "yoy", "ECB 기준금리": "level", "GDP": "qoq"},
     "UK": {"CPI": "yoy", "BOE 기준금리": "level"},
     "JP": {"CPI": "yoy", "BOJ 기준금리": "level"},
 }
@@ -97,7 +99,13 @@ def load(path):
         return []
     rows = []
     with open(path, newline="", encoding="utf-8") as f:
-        for lineno, row in enumerate(csv.DictReader(f), start=2):
+        reader = csv.DictReader(f)
+        if reader.fieldnames is not None and reader.fieldnames != FIELDS:
+            raise ValueError(
+                f"{path}: 헤더가 스키마와 다르다 — 마이그레이션이 필요하다\n"
+                f"         파일: {','.join(reader.fieldnames)}\n"
+                f"         기대: {','.join(FIELDS)}")
+        for lineno, row in enumerate(reader, start=2):
             if None in row:
                 raise ValueError(
                     f"{path} L{lineno}: 필드가 헤더보다 많다 — 값에 쉼표가 들어갔는지 확인하라")
@@ -175,7 +183,7 @@ def cmd_record(args):
             # 새 행은 실제 발표값이 있어야 한다 — 발표 전 일정을 저장하지 않기 위해서다.
             # 기존 행에 예상치·이전치만 덧붙이는 건 보강이므로 이 검사에 걸리지 않는다.
             if not any(row[f] for f in VALUE_FIELDS):
-                log(f"  skip L{lineno}: level·yoy·mom이 모두 빈 신규 행 "
+                log(f"  skip L{lineno}: 발표값 칸이 모두 빈 신규 행 "
                     f"(발표 전 일정은 기록하지 않는다)")
                 continue
             index[key] = row
