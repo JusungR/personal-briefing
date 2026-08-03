@@ -10,14 +10,25 @@ CSV를 archive/ 아래 두는 이유: .github/workflows/sync-archive-to-main.yml
 
 외부 의존성 없음 — Python 표준 라이브러리만 사용한다.
 
+발표값은 level(원계열)·yoy(전년비)·mom(전월비) 세 칸에 나눠 담는다. 브리핑은 보통
+yoy/mom만 쓰지만 지수 원계열도 함께 남겨야 나중에 재계산·검증이 가능하다.
+셋 중 지표에 해당하는 것만 채우면 되고, 브리핑이 어느 칸을 헤드라인으로 쓸지는
+WATCHLIST가 정한다.
+
 사용 예:
     # 기록 (stdin, 헤더 없는 CSV 행). 같은 키를 다시 넣으면 값이 갱신된다.
+    #   country,indicator,release_date,release_time_kst,period,
+    #   level,yoy,mom,forecast,previous,source
     python3 indicators.py record <<'EOF'
-    2026-07-29,03:00,US,FOMC 기준금리,2026-07,3.50~3.75%,3.50~3.75%,3.50~3.75%,Reuters
+    US,CPI,2026-07-14,21:30,2026-06,325.4,+3.5%,-0.4%,+3.8%,+4.2%,BLS
+    US,FOMC 기준금리,2026-07-29,03:00,2026-07,3.50~3.75%,,,3.50~3.75%,3.50~3.75%,Reuters
     EOF
 
-    # 조회 (브리핑의 '지난주 발표' 렌더링용)
+    # 조회 — 기간(브리핑의 '지난주 발표' 렌더링용)
     python3 indicators.py show --since 2026-07-22 --until 2026-07-29
+
+    # 조회 — 지표 시계열
+    python3 indicators.py show --country US --indicator CPI
 
 종료 코드:
     0  정상
@@ -31,23 +42,32 @@ import datetime as dt
 import os
 import sys
 
+# country·indicator를 앞에 두어 정렬키가 곧 열 순서가 되게 한다 —
+# 파일을 그냥 열어도 같은 지표가 연속 블록으로 보인다.
 FIELDS = [
-    "release_date", "release_time_kst", "country", "indicator", "period",
-    "actual", "forecast", "previous", "source",
+    "country", "indicator", "release_date", "release_time_kst", "period",
+    "level", "yoy", "mom", "forecast", "previous", "source",
 ]
 # 같은 발표를 식별하는 키. 재기록 시 이 키가 같으면 덮어쓴다(속보치→확정치 갱신).
-KEY = ("release_date", "country", "indicator", "period")
+KEY = ("country", "indicator", "release_date", "period")
+# 발표값을 담는 칸. 셋 중 최소 하나는 있어야 기록된다.
+VALUE_FIELDS = ("level", "yoy", "mom")
 
 # 시계열이 끊기지 않으려면 같은 지표가 항상 같은 이름이어야 한다.
 # 아카이브에서 "미국 CPI" / "미국 5월 CPI" / "5월 소비자물가지수(CPI)" 처럼
 # 표기가 갈렸던 문제를 막기 위해 표준명을 강제한다.
+#
+# 값은 브리핑이 헤드라인으로 쓰는 칸이다. 지표마다 관례가 다르다 —
+# 물가는 전년비(yoy), 고용·소매판매는 전월 증감(mom), 금리·PMI는 수준(level).
 WATCHLIST = {
-    "US": ["CPI", "근원 CPI", "PCE 물가", "근원 PCE", "PPI", "비농업고용", "실업률",
-           "GDP", "소매판매", "ISM 제조업 PMI", "ISM 서비스업 PMI", "FOMC 기준금리"],
-    "KR": ["CPI", "기준금리", "GDP"],
-    "EU": ["HICP", "ECB 기준금리", "GDP"],
-    "UK": ["CPI", "BOE 기준금리"],
-    "JP": ["CPI", "BOJ 기준금리"],
+    "US": {"CPI": "yoy", "근원 CPI": "yoy", "PCE 물가": "yoy", "근원 PCE": "yoy",
+           "PPI": "yoy", "비농업고용": "mom", "실업률": "level", "GDP": "yoy",
+           "소매판매": "mom", "ISM 제조업 PMI": "level", "ISM 서비스업 PMI": "level",
+           "FOMC 기준금리": "level"},
+    "KR": {"CPI": "yoy", "기준금리": "level", "GDP": "yoy"},
+    "EU": {"HICP": "yoy", "ECB 기준금리": "level", "GDP": "yoy"},
+    "UK": {"CPI": "yoy", "BOE 기준금리": "level"},
+    "JP": {"CPI": "yoy", "BOJ 기준금리": "level"},
 }
 
 CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -75,7 +95,8 @@ def load(path):
 
 
 def save(path, rows):
-    rows.sort(key=lambda r: (r["release_date"], r["country"], r["indicator"]))
+    # 지표별로 묶어 저장한다. 한 지표의 추이를 연속으로 읽을 수 있다.
+    rows.sort(key=lambda r: (r["country"], r["indicator"], r["release_date"]))
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
@@ -102,9 +123,9 @@ def validate(values, lineno):
         log(f"  skip L{lineno}: {row['country']}의 알 수 없는 indicator {row['indicator']!r}")
         log(f"         유효: {', '.join(WATCHLIST[row['country']])}")
         return None
-    # 미래 일정은 저장하지 않는다 — 실제치가 있어야 시계열이 된다.
-    if not row["actual"]:
-        log(f"  skip L{lineno}: actual 없음 (발표 전 일정은 기록하지 않는다)")
+    # 미래 일정은 저장하지 않는다 — 실제 발표값이 있어야 시계열이 된다.
+    if not any(row[f] for f in VALUE_FIELDS):
+        log(f"  skip L{lineno}: level·yoy·mom이 모두 비었다 (발표 전 일정은 기록하지 않는다)")
         return None
     return row
 
@@ -154,9 +175,30 @@ def cmd_record(args):
     return 0
 
 
+def fmt_row(r):
+    """한 발표를 한 줄로. 헤드라인 값을 앞에 두고 나머지 표현을 뒤에 붙인다."""
+    head = WATCHLIST[r["country"]][r["indicator"]]
+    parts = [r["release_date"], r["country"], r["indicator"]]
+    if r["period"]:
+        parts.append(r["period"])
+    parts.append(f"실제 {r[head]}")
+    if r["forecast"]:
+        parts.append(f"예상 {r['forecast']}")
+    if r["previous"]:
+        parts.append(f"이전 {r['previous']}")
+    # 헤드라인이 아닌 나머지 표현도 함께 보여준다(원계열·다른 기준).
+    extra = [f"{f} {r[f]}" for f in VALUE_FIELDS if f != head and r[f]]
+    if extra:
+        parts.append("(" + " · ".join(extra) + ")")
+    if r["source"]:
+        parts.append(r["source"])
+    return " | ".join(parts)
+
+
 def cmd_show(args):
-    since, until = parse_date(args.since), parse_date(args.until)
-    if since is None or until is None:
+    since = parse_date(args.since) if args.since else None
+    until = parse_date(args.until) if args.until else None
+    if (args.since and since is None) or (args.until and until is None):
         log("--since/--until 형식 오류 (YYYY-MM-DD)")
         return 2
 
@@ -169,26 +211,31 @@ def cmd_show(args):
     hits = []
     for r in rows:
         d = parse_date(r["release_date"])
-        if d is not None and since <= d <= until:
-            hits.append((d, r))
-    hits.sort(key=lambda x: (x[0], x[1]["country"], x[1]["indicator"]))
+        if d is None:
+            continue
+        if since and d < since:
+            continue
+        if until and d > until:
+            continue
+        if args.country and r["country"] != args.country:
+            continue
+        if args.indicator and r["indicator"] != args.indicator:
+            continue
+        hits.append((d, r))
 
     if not hits:
-        log(f"{since} ~ {until} 기록 없음")
+        log("조건에 맞는 기록 없음")
         return 1
 
+    if args.indicator or args.country:
+        # 시계열 보기: 지표별로 묶어 추이를 읽는다.
+        hits.sort(key=lambda x: (x[1]["country"], x[1]["indicator"], x[0]))
+    else:
+        # 브리핑의 '지난주 발표' 보기: 발표일 순.
+        hits.sort(key=lambda x: (x[0], x[1]["country"], x[1]["indicator"]))
+
     for _, r in hits:
-        parts = [r["release_date"], r["country"], r["indicator"]]
-        if r["period"]:
-            parts.append(r["period"])
-        parts.append(f"실제 {r['actual']}")
-        if r["forecast"]:
-            parts.append(f"예상 {r['forecast']}")
-        if r["previous"]:
-            parts.append(f"이전 {r['previous']}")
-        if r["source"]:
-            parts.append(r["source"])
-        print(" | ".join(parts))
+        print(fmt_row(r))
 
     log(f"조회 완료: {len(hits)}건")
     return 0
@@ -201,9 +248,11 @@ def main():
     p_rec = sub.add_parser("record", help="stdin의 CSV 행을 upsert (헤더 없음)")
     p_rec.set_defaults(func=cmd_record)
 
-    p_show = sub.add_parser("show", help="기간 내 기록 조회")
-    p_show.add_argument("--since", required=True, help="시작일 (YYYY-MM-DD)")
-    p_show.add_argument("--until", required=True, help="종료일 (YYYY-MM-DD)")
+    p_show = sub.add_parser("show", help="기록 조회 (기간·국가·지표로 거른다)")
+    p_show.add_argument("--since", help="시작일 (YYYY-MM-DD)")
+    p_show.add_argument("--until", help="종료일 (YYYY-MM-DD)")
+    p_show.add_argument("--country", help="국가 코드 (US/KR/EU/UK/JP)")
+    p_show.add_argument("--indicator", help="지표 표준명 (예: CPI)")
     p_show.set_defaults(func=cmd_show)
 
     args = ap.parse_args()

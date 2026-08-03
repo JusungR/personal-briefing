@@ -109,29 +109,40 @@ WebSearch로 **KST_TODAY-7일 ~ KST_TODAY** 사이에 발표된 핵심 지표의
 대상은 `indicators.py`의 watchlist 지표(미국·한국·유로존·영국·일본의 CPI·PCE·PPI·
 고용·GDP·소매판매·PMI·기준금리)로 한정한다.
 
+브리핑에 쓸 헤드라인 수치만이 아니라 **지수 원계열(level)과 전월비(mom)도 함께 받아
+적는다.** 나중에 재계산·검증을 하려면 전년비만으로는 부족하다.
+
 **검색 쿼리 예시:**
 ```
 US CPI actual vs forecast {지난주 범위}
 economic calendar results last week {KST_TODAY}
 {국가} {지표명} 발표 결과 예상치
+{indicator} index level {period}      ← 지수 원계열용
 ```
 
 ### 4-2. 아카이브 기록
 
-실제치가 확정된 것만 `indicators.py record`로 기록한다. **발표 전 일정은 넣지 않는다.**
+실제 발표값이 있는 것만 `indicators.py record`로 기록한다. **발표 전 일정은 넣지 않는다.**
 
 ```bash
 python3 /home/user/personal-briefing/indicators.py record <<'EOF'
-{release_date},{HH:MM},{country},{indicator},{period},{actual},{forecast},{previous},{source}
+{country},{indicator},{release_date},{HH:MM},{period},{level},{yoy},{mom},{forecast},{previous},{source}
 EOF
 ```
 
-- 필드 순서: `release_date,release_time_kst,country,indicator,period,actual,forecast,previous,source`
+- 필드 순서: `country,indicator,release_date,release_time_kst,period,level,yoy,mom,forecast,previous,source`
   (`release_date`는 KST 발표일 `YYYY-MM-DD`, `period`는 대상 기간 `2026-06` 또는 `2026Q2`)
+- **`level`·`yoy`·`mom` 중 지표에 해당하는 것만 채운다.** 셋 다 비면 행이 거부된다.
+  - 물가(CPI·PCE·PPI·HICP): `level`에 지수, `yoy`·`mom`에 변화율
+  - 금리·PMI·실업률: `level`에 수준값만
+  - 고용·소매판매: `mom`에 증감(`+57K`, `+0.2%`)
+- `forecast`·`previous`는 그 지표의 **헤드라인 기준**에 맞춘다(물가는 전년비, 금리는 수준).
+  어느 칸이 헤드라인인지는 `indicators.py`의 `WATCHLIST`가 정한다.
 - `country`/`indicator`는 **watchlist 표준명**이어야 한다. 틀리면 해당 행만 거부되고
   stderr에 유효 목록이 출력되므로 그걸 보고 고친다.
-- 7일 윈도우가 매일 겹치지만 스크립트가 키 `(release_date, country, indicator, period)`로
+- 7일 윈도우가 매일 겹치지만 스크립트가 키 `(country, indicator, release_date, period)`로
   upsert하므로 **그대로 다시 넣어도 안전하다**. 속보치가 확정치로 바뀌면 값만 갱신된다.
+  나중에 `level`만 추가로 알게 됐을 때 같은 키로 다시 넣어 채워도 된다.
 - 이 단계는 best-effort다. 실패해도 브리핑은 계속 진행한다.
 
 ### 4-3. 「지난주 발표」 렌더링
@@ -143,9 +154,16 @@ EOF
 python3 /home/user/personal-briefing/indicators.py show --since {KST_TODAY-7일} --until {KST_TODAY}
 ```
 
-- 출력 각 행을 A-5 「▸ 지난주 발표」 형식으로 옮긴다.
+- 출력 각 행을 A-5 「▸ 지난주 발표」 형식으로 옮긴다. `실제`는 그 지표의 헤드라인
+  값이고, 괄호 안 `(mom ...)`처럼 붙는 부가 표현은 필요할 때만 옮긴다.
 - **상회/부합/하회 판단은 여기서 붙인다** (스크립트는 판정하지 않는다).
 - exit 1(기록 없음)이면 `기록된 발표 없음` 한 줄만 둔다.
+
+특정 지표의 추이를 확인하고 싶으면 기간 대신 지표로 거른다:
+
+```bash
+python3 /home/user/personal-briefing/indicators.py show --country US --indicator CPI
+```
 
 ### 4-4. 향후 7일 일정
 
