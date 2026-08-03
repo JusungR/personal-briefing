@@ -33,7 +33,7 @@ WATCHLIST가 정한다.
 종료 코드:
     0  정상
     1  기록한 유효 행 0건 / 조회 결과 0건
-    2  CSV 입출력 실패
+    2  CSV 입출력 실패 · CSV 손상 · 인자 오류
 """
 
 import argparse
@@ -87,21 +87,40 @@ def parse_date(value):
 
 
 def load(path):
-    """CSV를 dict 리스트로 읽는다. 파일이 없으면 빈 리스트."""
+    """CSV를 dict 리스트로 읽는다. 파일이 없으면 빈 리스트.
+
+    손상된 행은 조용히 넘기지 않고 ValueError를 낸다. 필드 수가 헤더와 어긋난 행을
+    그대로 들고 가면 쓰기 단계에서 터지는데, 그때는 이미 파일을 연 뒤라 손을 쓰기
+    어렵다. 읽는 즉시 멈추는 편이 안전하고 원인도 분명하다.
+    """
     if not os.path.exists(path):
         return []
+    rows = []
     with open(path, newline="", encoding="utf-8") as f:
-        return [dict(row) for row in csv.DictReader(f)]
+        for lineno, row in enumerate(csv.DictReader(f), start=2):
+            if None in row:
+                raise ValueError(
+                    f"{path} L{lineno}: 필드가 헤더보다 많다 — 값에 쉼표가 들어갔는지 확인하라")
+            if any(v is None for v in row.values()):
+                raise ValueError(f"{path} L{lineno}: 필드가 헤더보다 적다")
+            rows.append(dict(row))
+    return rows
 
 
 def save(path, rows):
-    # 지표별로 묶어 저장한다. 한 지표의 추이를 연속으로 읽을 수 있다.
+    """지표별로 묶어 저장한다. 한 지표의 추이를 연속으로 읽을 수 있다.
+
+    임시 파일에 다 쓴 뒤 갈아끼운다. 대상 파일을 바로 열면 쓰다가 예외가 났을 때
+    이미 비워진 파일만 남아 아카이브가 잘린다.
+    """
     rows.sort(key=lambda r: (r["country"], r["indicator"], r["release_date"]))
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)
+    os.replace(tmp, path)
 
 
 def validate(values, lineno):
@@ -127,7 +146,11 @@ def validate(values, lineno):
 
 
 def cmd_record(args):
-    rows = load(CSV_PATH)
+    try:
+        rows = load(CSV_PATH)
+    except (OSError, ValueError) as e:
+        log(f"CSV 읽기 실패: {e}")
+        return 2
     index = {tuple(r[k] for k in KEY): r for r in rows}
 
     added = updated = unchanged = 0
@@ -171,7 +194,7 @@ def cmd_record(args):
 
     try:
         save(CSV_PATH, rows)
-    except OSError as e:
+    except (OSError, ValueError) as e:
         log(f"CSV 쓰기 실패: {e}")
         return 2
 
@@ -182,11 +205,16 @@ def cmd_record(args):
 
 def fmt_row(r):
     """한 발표를 한 줄로. 헤드라인 값을 앞에 두고 나머지 표현을 뒤에 붙인다."""
-    head = WATCHLIST[r["country"]][r["indicator"]]
+    # WATCHLIST에서 빠진 지표(손편집·표준명 변경)도 조회는 되게 한다.
+    # 예전엔 KeyError로 죽어 브리핑의 렌더링 단계가 통째로 멈췄다.
+    head = WATCHLIST.get(r["country"], {}).get(r["indicator"])
+    # 헤드라인 칸이 비어 있으면(예: 지수만 먼저 기록) 값이 있는 칸으로 대체한다.
+    if not head or not r[head]:
+        head = next((f for f in VALUE_FIELDS if r[f]), None)
     parts = [r["release_date"], r["country"], r["indicator"]]
     if r["period"]:
         parts.append(r["period"])
-    parts.append(f"실제 {r[head]}")
+    parts.append(f"실제 {r[head]}" if head else "실제 미상")
     if r["forecast"]:
         parts.append(f"예상 {r['forecast']}")
     if r["previous"]:
@@ -209,7 +237,7 @@ def cmd_show(args):
 
     try:
         rows = load(CSV_PATH)
-    except OSError as e:
+    except (OSError, ValueError) as e:
         log(f"CSV 읽기 실패: {e}")
         return 2
 
