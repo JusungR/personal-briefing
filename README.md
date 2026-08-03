@@ -100,8 +100,8 @@ lookaround로 매칭해 `s&p`·`interest rate` 같은 특수문자/다단어구�
 ```bash
 # 기록 (stdin, 헤더 없는 CSV). 같은 발표를 다시 넣으면 값만 갱신된다.
 python3 indicators.py record <<'EOF'
-US,CPI,2026-07-14,21:30,2026-06,325.4,+3.5%,-0.4%,+3.8%,+4.2%,BLS
-US,FOMC 기준금리,2026-07-29,03:00,2026-07,3.50~3.75%,,,3.50~3.75%,3.50~3.75%,Reuters
+US,CPI,2026-07-14,21:30,2026-06,325.4,+3.5%,,-0.4%,+3.8%,+4.2%,BLS
+US,FOMC 기준금리,2026-07-30,03:00,2026-07,3.50~3.75%,,,,3.50~3.75%,3.50~3.75%,Fed
 EOF
 
 # 조회 — 기간 (브리핑의 '지난주 발표' 렌더링용)
@@ -111,8 +111,9 @@ python3 indicators.py show --since 2026-07-22 --until 2026-07-29
 python3 indicators.py show --country US --indicator CPI
 ```
 
-- **스키마**: `country,indicator,release_date,release_time_kst,period,level,yoy,mom,forecast,previous,source`
-- **발표값은 세 칸으로 나눈다**: `level`(지수 원계열) · `yoy`(전년비) · `mom`(전월비).
+- **스키마**: `country,indicator,release_date,release_time_kst,period,level,yoy,qoq,mom,forecast,previous,source`
+- **발표값을 기준별로 나눈다**: `level`(지수 원계열) · `yoy`(전년비) · `qoq`(전분기비
+  연율, GDP) · `mom`(전월비).
   브리핑은 보통 yoy/mom만 쓰지만 원계열을 남겨야 나중에 재계산·검증이 된다.
   지표에 해당하는 것만 채우면 되고(금리는 `level`만, 고용은 `mom`만), 어느 칸을
   헤드라인으로 쓸지는 `WATCHLIST`가 정한다.
@@ -122,7 +123,7 @@ python3 indicators.py show --country US --indicator CPI
   그대로 다시 넣어도 중복이 쌓이지 않는다. 속보치가 확정치로 바뀌면 값만 갱신된다.
 - **표준명 강제**: `country`/`indicator`가 스크립트의 `WATCHLIST`에 없으면 해당 행을
   거부하고 유효 목록을 알려준다. 시계열이 표기 변이로 끊기는 걸 막는다.
-- **미래 일정은 저장하지 않는다** — 신규 행은 `level`·`yoy`·`mom` 중 하나가 있어야
+- **미래 일정은 저장하지 않는다** — 신규 행은 발표값 칸 중 하나가 있어야
   한다. 일정은 매일 바뀌므로 보존 가치가 없다. 기존 행에 예상치·이전치만 덧붙이는
   보강은 허용된다.
 - **부분 갱신을 지원한다** — `record`는 값이 있는 칸만 반영하므로, 나중에 지수

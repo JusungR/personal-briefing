@@ -126,16 +126,17 @@ economic calendar results last week {KST_TODAY}
 
 ```bash
 python3 /home/user/personal-briefing/indicators.py record <<'EOF'
-{country},{indicator},{release_date},{HH:MM},{period},{level},{yoy},{mom},{forecast},{previous},{source}
+{country},{indicator},{release_date},{HH:MM},{period},{level},{yoy},{qoq},{mom},{forecast},{previous},{source}
 EOF
 ```
 
-- 필드 순서: `country,indicator,release_date,release_time_kst,period,level,yoy,mom,forecast,previous,source`
+- 필드 순서: `country,indicator,release_date,release_time_kst,period,level,yoy,qoq,mom,forecast,previous,source`
   (`release_date`는 KST 발표일 `YYYY-MM-DD`, `period`는 대상 기간 `2026-06` 또는 `2026Q2`)
-- **`level`·`yoy`·`mom` 중 지표에 해당하는 것만 채운다.** 셋 다 비면 행이 거부된다.
+- **`level`·`yoy`·`qoq`·`mom` 중 지표에 해당하는 것만 채운다.** 모두 비면 신규 행이 거부된다.
   - 물가(CPI·PCE·PPI·HICP): `level`에 지수, `yoy`·`mom`에 변화율
   - 금리·PMI·실업률: `level`에 수준값만
   - 고용·소매판매: `mom`에 증감(`+57K`, `+0.2%`)
+  - GDP: `qoq`에 전분기비 연율
 - `forecast`·`previous`는 그 지표의 **헤드라인 기준**에 맞춘다(물가는 전년비, 금리는 수준).
   어느 칸이 헤드라인인지는 `indicators.py`의 `WATCHLIST`가 정한다.
 - `country`/`indicator`는 **watchlist 표준명**이어야 한다. 틀리면 해당 행만 거부되고
