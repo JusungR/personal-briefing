@@ -52,20 +52,16 @@ jobs:
           echo "동기화할 파일:"
           echo "$CHANGED"
 
-          # 파일 임시 저장
-          mkdir -p /tmp/archive-sync
-          for f in $CHANGED; do
-            cp "$f" "/tmp/archive-sync/"
-          done
+          # main으로 옮기기 전에 이 브랜치의 커밋을 붙잡아 둔다.
+          HEAD_SHA=$(git rev-parse HEAD)
 
           # main으로 전환
           git checkout main
           git pull origin main
 
-          # archive 파일 복사
-          for f in $CHANGED; do
-            cp "/tmp/archive-sync/$(basename $f)" "archive/$(basename $f)"
-          done
+          # 그 커밋에서 파일을 경로째 꺼낸다. basename으로 되붙이면 archive/ 아래
+          # 하위 폴더가 생겼을 때 경로가 뭉개진다(archive/2026/08-24.md → archive/08-24.md).
+          git checkout "$HEAD_SHA" -- $CHANGED
 
           # 변경사항 없으면 종료
           git add archive/

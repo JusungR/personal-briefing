@@ -1,6 +1,6 @@
 # personal-briefing
 
-매일 아침 한국어 브리핑(서울 날씨 · 오늘 일정 · 간밤 미국·유럽 뉴스)을 작성해
+매일 아침 한국어 브리핑(서울 날씨 · 오늘 일정 · 간밤 미국·유럽 뉴스 · 경제지표)을 작성해
 Gmail 드래프트와 텔레그램으로 보낸다.
 
 ## 구성 파일
@@ -13,6 +13,8 @@ Gmail 드래프트와 텔레그램으로 보낸다.
 | `news-feeds.json` | 뉴스 피드 목록과 키워드·점수 설정(데이터 기반, 자유롭게 편집). |
 | `indicators.py` | 주요 경제지표(CPI·PCE·기준금리 등)의 발표 실제치를 시계열로 누적·조회. |
 | `archive/indicators.csv` | 위 스크립트가 관리하는 지표 실적 시계열(한 줄 = 한 발표). |
+| `weather.py` | 날씨 예보·우산 권고와 다음 날 실제 강수를 누적해 권고 적중률을 검증. |
+| `archive/weather.csv` | 위 스크립트가 관리하는 날씨 기록(한 줄 = 하루). |
 | `gas-auto-send/Code.gs` | `[Daily Briefing]` Gmail 드래프트를 매일 자동 발송하는 Google Apps Script. |
 | `archive/` | 매일 발송된 브리핑 본문(`{날짜}.md`)을 누적 보관(향후 리뷰·개선용). |
 
@@ -36,12 +38,12 @@ Gmail 드래프트와 텔레그램으로 보낸다.
 WebSearch는 상위 기사 확인·보강용으로만 쓴다.
 
 ```bash
-python3 collect-news.py --news-date 2026-05-27          # 기본 윈도우 30h
-python3 collect-news.py --news-date 2026-05-27 --hours 24
+python3 collect-news.py --news-date 2026-05-27          # 기본: NEWS_DATE 00:00 UTC 고정
+python3 collect-news.py --news-date 2026-05-27 --hours 24   # 디버그용 롤링 윈도우
 ```
 
 동작: 피드 수집 → 날짜 윈도우 필터(신선도) → 제목 유사도 중복제거 →
-관심분야(경제·시장·AI/기술) 키워드·출처·신선도·교차보도 점수화 → 그룹별 정렬 출력.
+관심분야(경제·시장·AI/기술·정치) 키워드·출처·신선도·교차보도 점수화 → 그룹별 정렬 출력.
 
 - **요구사항**: `python3`(표준 라이브러리만, pip 설치 불필요) + 아웃바운드 HTTPS.
 - **종료 코드**: `0` 정상, `1` 신선 기사 0건(프롬프트가 WebSearch로 폴백), `2` 설정 로드 실패.
@@ -65,9 +67,10 @@ lookaround로 매칭해 `s&p`·`interest rate` 같은 특수문자/다단어구�
 ### 피드 편집 (news-feeds.json)
 
 `feeds` 배열에 `{name, url, area, tier, region}`을 추가/삭제하면 된다.
-`area`는 `economy|markets|ai_tech`, `tier`는 `1`(주요 1차 출처) 또는 `2`, `region`은 `US|EU|GLOBAL`.
+`area`는 `economy|markets|ai_tech|politics`, `tier`는 `1`(주요 1차 출처) 또는 `2`, `region`은 `US|EU|GLOBAL`.
 `keywords`로 분야 분류 키워드를, `window_lead_hours`/`per_group_cap`/`dedupe_threshold`로
-동작을 조정한다.
+동작을 조정한다. `exclude_keywords`에 걸린 기사는 수집 단계에서 버린다(스포츠·연예).
+미설정이면 무동작.
 
 `type: "gnews"`를 주면 해당 피드는 **Google News RSS** 항목으로 처리된다:
 실제 출처명·지역은 항목별 `<source>` 요소(예: `<source url="reuters.com">Reuters</source>`)에서
@@ -88,7 +91,7 @@ lookaround로 매칭해 `s&p`·`interest rate` 같은 특수문자/다단어구�
 ### 브리핑 보관 (archive/)
 
 발송된 브리핑은 매일 `archive/{KST_TODAY}.md`로 git 커밋해 누적 보관한다
-(`briefing-prompt.md` Section 6). 향후 분야 균형·출처 다양성·중복 패턴 리뷰의 입력으로 쓴다.
+(`briefing-prompt.md` Section 7). 향후 분야 균형·출처 다양성·중복 패턴 리뷰의 입력으로 쓴다.
 
 ## 경제지표 아카이브 (indicators.py)
 
@@ -138,3 +141,50 @@ python3 indicators.py show --country US --indicator CPI
 > CSV를 `archive/` 아래 두는 건 의도적이다. `sync-archive-to-main.yml`은 `archive/**`만
 > main으로 동기화하고 일일 브리핑은 PR을 만들지 않으므로, 레포 루트에 두면 main에
 > 반영되지 않는다.
+
+## 날씨 권고 아카이브 (weather.py)
+
+우산 권고가 실제와 자주 어긋났다. 아카이브 80일치를 세어 보니 **74일(93%)에 우산이
+언급**됐고, 강수 확률 24%에 "우산 지참"(08-03), 40%에 "우산 **필수**"(06-29),
+확률 수치 없이 "장마 시즌이므로 가벼운 우산 휴대"(07-30) 같은 판단이 섞여 있었다.
+원인은 명세에 임계값이 없어 매일 즉흥 판단이 됐고, 계절 사전확률이 그날 예보 대신
+근거로 쓰인 것이다.
+
+이제 권고 등급은 **`briefing-prompt.md` 1-1 임계값 표**에서만 나온다(그 표가 정본이다).
+이 스크립트는 예보와 다음 날 실제 강수를 누적해 **그 임계값이 실제로 맞는지 검증**한다.
+
+```bash
+# 오늘 예보 기록 (stdin, 헤더 없는 CSV)
+python3 weather.py record <<'EOF'
+2026-08-25,24,32,20%,불필요,,,
+EOF
+
+# 다음 날, 실제 강수만 덧씌우기 (값이 있는 칸만 반영되므로 예보는 보존된다)
+python3 weather.py record <<'EOF'
+2026-08-25,,,,,Y,12mm,
+EOF
+
+# 조회 — 마지막 줄에 적중 집계가 붙는다
+python3 weather.py show --since 2026-08-01 --until 2026-08-25
+```
+
+- **스키마**: `date,tmin,tmax,pop,advice,actual_rain,actual_mm,note`
+- **upsert 키는 `date`** — 하루에 한 행. 같은 날을 다시 넣어도 중복이 쌓이지 않는다.
+- **표준명 강제**: `advice`는 `필수|권장|선택|불필요`, `actual_rain`은 `Y|N|미확인`만
+  받는다. 자유서술("가벼운 우산 휴대 권장")을 허용하면 집계가 불가능해진다.
+- **임계값 일관성 경고**: `pop`이 숫자인데 `advice`가 임계값 표와 어긋나면 stderr에
+  경고한다. **행을 거부하지는 않는다** — 호우·뇌우 특보가 걸리면 낮은 확률에도 `필수`가
+  정당하기 때문이다. 그 경우 `note`에 특보명을 적는다.
+- **부분 갱신**: `record`는 값이 있는 칸만 반영하므로, 다음 날 실제치만 담은 행을 같은
+  날짜로 넣으면 예보(기온·확률·권고)는 그대로 남는다.
+- **집계에서 빼는 것**: `pop`이 `미확인`인 날과 실제 강수가 아직 안 채워진 날은 제외하고
+  건수만 따로 표기한다. 섞으면 "0%라서 불필요"와 "몰라서 불필요"가 같은 칸에 들어가
+  적중률이 흐려진다.
+- `pop`은 `40%`처럼 **문자열 그대로** 저장한다(단위가 섞이므로). CSV가 깨지지 않게
+  값에 쉼표를 넣지 않는다.
+- **요구사항**: `python3`(표준 라이브러리만). **종료 코드**: `0` 정상, `1` 유효 행/조회
+  결과 0건, `2` 입출력·CSV 손상·인자 오류.
+
+> `archive/weather.csv`는 미리 만들어 두지 않는다. 첫 브리핑 실행 때 생성되며,
+> 그전까지 `show`는 "기록 없음"으로 exit 1을 낸다(정상 동작).
+> CSV를 `archive/` 아래 두는 이유는 위 `indicators.py` 절과 같다.

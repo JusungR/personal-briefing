@@ -32,11 +32,60 @@
 
 ## 1. 날씨 (서울)
 
-WebSearch로 오늘 서울 날씨 조회:
-- 최저/최고 기온, 강수 확률, 미세먼지·초미세먼지 등급
-- 한 줄 권고 (우산/겉옷/마스크 여부)
+WebSearch로 **오늘 서울 날씨**와 **어제 실제 강수 여부**를 함께 조회한다(한 번의 조회로 끝낸다):
+- 오늘: 최저/최고 기온, 강수 확률, 미세먼지·초미세먼지 등급
+- 어제(**KST_TODAY - 1일**): 실제로 비가 왔는지, 왔다면 강수량
 
 → 출력 레이아웃: `template.md` **A-2 날씨 블록**.
+
+### 1-1. 우산 권고 임계값 (이 표가 유일한 판단 기준이다)
+
+강수 확률을 아래 표에 대입해 등급을 정하고, 그 등급의 문구를 그대로 쓴다.
+등급 이름 4종은 `weather.py`가 강제하는 표준명이다.
+
+| 강수 확률 | 등급 | 문구 |
+|---|---|---|
+| 70% 이상 | `필수` | 우산 필수 |
+| 50~69% | `권장` | 우산 지참 권장 |
+| 30~49% | `선택` | 접이식 우산 선택 — 소나기 시간대만 언급 |
+| 30% 미만 | `불필요` | 우산 불필요 |
+| 미확인 | `불필요` | **우산 문구를 아예 쓰지 않는다** |
+
+- **강수 확률은 숫자로 적는다.** 검색 결과가 "높음/낮음" 같은 정성 표현뿐이면 숫자를
+  한 번 더 찾고, 그래도 없으면 `미확인`으로 적는다. "높음"을 근거로 우산을 권하지 않는다.
+- **계절 추론 금지.** "장마철이므로", "여름이라" 같은 사전확률을 근거로 쓰지 않는다.
+  그날 예보 수치만 근거다.
+- **기상특보 예외.** 호우·뇌우 주의보/경보가 발효 중이면 강수 확률과 무관하게 `필수`로
+  올릴 수 있다. 단 **특보명을 권고 문구에 근거로 명시**한다.
+
+### 1-2. 아카이브 기록
+
+권고가 실제와 맞았는지 나중에 되짚기 위해 예보와 실제치를 `archive/weather.csv`에 남긴다.
+이 단계는 best-effort다 — 실패해도 브리핑은 계속 진행한다.
+
+```bash
+# 어제 행에 실제 강수만 덧씌운다 (값이 있는 칸만 반영되므로 예보는 보존된다)
+python3 /home/user/personal-briefing/weather.py record <<'EOF'
+{KST_TODAY-1일},,,,,{Y|N|미확인},{강수량},
+EOF
+
+# 오늘 예보를 기록한다
+python3 /home/user/personal-briefing/weather.py record <<'EOF'
+{KST_TODAY},{최저},{최고},{강수확률},{등급},,,{메모}
+EOF
+```
+
+- 필드 순서: `date,tmin,tmax,pop,advice,actual_rain,actual_mm,note`
+- `pop`은 `40%` 또는 `미확인`, `advice`는 `필수|권장|선택|불필요`, `actual_rain`은 `Y|N|미확인`.
+- **스크립트가 임계값 경고를 내면 권고 문구를 1-1 표에 맞춰 고치고 다시 기록한다.**
+  특보 예외로 의도한 것이면 `note`에 특보명을 적고 그대로 둔다(경고는 거부가 아니다).
+- 같은 날짜를 다시 넣어도 upsert되므로 중복이 쌓이지 않는다.
+
+지난 권고가 얼마나 맞았는지 확인하려면(브리핑 본문에는 넣지 않는다):
+
+```bash
+python3 /home/user/personal-briefing/weather.py show --since {시작일} --until {종료일}
+```
 
 ## 2. 오늘 일정
 
@@ -256,13 +305,14 @@ EOF
 
 ```bash
 cd /home/user/personal-briefing
-git add archive/{KST_TODAY}.md archive/indicators.csv
+git add archive/{KST_TODAY}.md archive/indicators.csv archive/weather.csv
 git commit -m "Archive daily briefing {KST_TODAY}"
 git push -u origin HEAD || (sleep 2 && git push -u origin HEAD)
 ```
 
 - 커밋 메시지는 위 형식을 따른다.
-- Section 4-2에서 갱신된 `archive/indicators.csv`도 함께 커밋한다. 변경이 없으면
-  `git add`는 아무 일도 하지 않으므로 그대로 둔다.
+- Section 4-2에서 갱신된 `archive/indicators.csv`와 Section 1-2에서 갱신된
+  `archive/weather.csv`도 함께 커밋한다. 변경이 없으면 `git add`는 아무 일도 하지
+  않으므로 그대로 둔다.
 - 푸시가 네트워크 오류로 실패하면 몇 차례 재시도하되, 끝내 실패해도 브리핑 자체는
   완료된 것으로 간주한다.

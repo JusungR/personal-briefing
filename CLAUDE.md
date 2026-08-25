@@ -11,10 +11,12 @@ template.md               # 산출물(메일 본문·텔레그램 요약) 캐노
 collect-news.py           # RSS 기반 뉴스 수집기 (표준 라이브러리만, pip 불필요)
 news-feeds.json           # 피드 목록·키워드·점수 설정
 indicators.py             # 주요 경제지표 실적 아카이브 (record/show, 표준 라이브러리만)
+weather.py                # 날씨 예보·우산 권고 아카이브 (record/show, 표준 라이브러리만)
 send_telegram.py          # 텔레그램 발송 스크립트
 gas-auto-send/Code.gs     # Gmail 드래프트 자동 발송 Google Apps Script
 archive/                  # 매일 발송된 브리핑 보관 ({YYYY-MM-DD}.md)
 archive/indicators.csv    # 경제지표 실적 시계열 (indicators.py가 관리)
+archive/weather.csv       # 날씨 예보·실제 강수 기록 (weather.py가 관리)
 .github/workflows/
   auto-merge-claude.yml   # claude/ 브랜치 PR 자동 스쿼시 머지
   sync-archive-to-main.yml # claude/ 브랜치의 archive/ 변경을 main에 자동 동기화
@@ -23,12 +25,13 @@ archive/indicators.csv    # 경제지표 실적 시계열 (indicators.py가 관�
 ## 핵심 동작 흐름
 
 1. **날짜 계산** — KST_TODAY = UTC currentDate + 1일 (보수적), NEWS_DATE = KST_TODAY - 1일
-2. **날씨** — WebSearch로 서울 날씨 조회
+2. **날씨** — WebSearch로 서울 날씨 + 어제 실제 강수 조회. 강수확률을 임계값 표에 대입해
+   우산 권고 등급을 정하고, 예보·실제치를 `weather.py record`로 기록
 3. **일정** — Google Calendar `list_events`로 KST_TODAY 일정 조회
 4. **뉴스** — `python3 collect-news.py --news-date {NEWS_DATE}` 실행 → 피드 수집 → WebSearch로 상위 기사 검증. 스크립트 실패 시 WebSearch-only 폴백
 5. **경제지표** — 전후 1주일. 지난 7일 실제치를 WebSearch로 모아 `indicators.py record`로 기록하고, `indicators.py show`로 되읽어 렌더링. 향후 7일 일정은 WebSearch로 조회(저장하지 않음)
 6. **발송** — Gmail 드래프트 생성(`mcp__Gmail__create_draft`) + 텔레그램 요약 발송. 출력 형식은 `template.md` 따름
-7. **보관** — `archive/{KST_TODAY}.md` + `archive/indicators.csv` 커밋·푸시
+7. **보관** — `archive/{KST_TODAY}.md` + `archive/indicators.csv` + `archive/weather.csv` 커밋·푸시
 
 ## 코딩 가이드라인
 
@@ -64,7 +67,7 @@ Andrej Karpathy 스타일 원칙. 이 레포를 수정할 때 반드시 따른�
 
 ### 의존성
 
-- `collect-news.py`와 `indicators.py`는 **Python 표준 라이브러리만** 사용한다. pip 패키지를 추가하지 않는다.
+- `collect-news.py`·`indicators.py`·`weather.py`는 **Python 표준 라이브러리만** 사용한다. pip 패키지를 추가하지 않는다.
 - `send_telegram.py`만 `requests`를 사용한다.
 
 ### 뉴스 수집 (collect-news.py)
@@ -95,6 +98,28 @@ Andrej Karpathy 스타일 원칙. 이 레포를 수정할 때 반드시 따른�
 - 파일 경로: `archive/{KST_TODAY}.md`
 - Gmail 드래프트 본문 그대로 저장 (텔레그램 요약본이 아닌 상세 버전).
 - 커밋 메시지: `Archive daily briefing {KST_TODAY}`
+
+### 날씨 권고 (weather.py)
+
+- 우산 권고는 **강수확률 임계값 표**에서만 나온다. 표의 정본은
+  **`briefing-prompt.md` 1-1**이다 — 표를 다른 파일에 복제하지 않는다.
+  `template.md`는 등급별 문구만, `weather.py`는 경고용 사본만 갖는다.
+- 등급 표준명은 **`필수`·`권장`·`선택`·`불필요`** 넷뿐이다. 자유서술("가벼운 우산 휴대
+  권장")을 허용하면 적중률 집계가 불가능해진다. `indicators.py`의 `WATCHLIST` 표준명
+  강제와 같은 취지다.
+- **계절 추론으로 우산을 권하지 않는다.** "장마철이므로" 같은 사전확률은 근거가 아니다 —
+  그날 예보 수치만 근거다. 강수확률이 미확인이면 우산 문구를 아예 뺀다.
+- 호우·뇌우 특보 발효 시에만 확률과 무관하게 `필수`로 올릴 수 있고, 이때 **특보명을
+  근거로 명시**한다. 스크립트는 임계값 위반을 **경고만 하고 거부하지 않는다** — 이 예외
+  때문이다.
+- 저장 위치는 **`archive/weather.csv`로 고정**한다(`indicators.csv`와 같은 이유).
+  upsert 키는 `date`, 하루에 한 행이다.
+- 예보는 당일 아침에, `actual_rain`·`actual_mm`는 **다음 날 브리핑이** 같은 키로 덧씌운다.
+  `record`는 값이 있는 칸만 반영하므로 예보가 지워지지 않는다.
+- 집계에서 **`pop`이 미확인인 날과 실제 강수가 안 채워진 날은 제외**한다. 섞으면
+  "0%라서 불필요"와 "몰라서 불필요"가 같은 칸에 들어가 적중률이 흐려진다.
+- 기록 실패는 best-effort로 취급하고 브리핑은 계속한다. 쓰기는 임시 파일에 마친 뒤
+  갈아끼운다(`indicators.py`와 동일).
 
 ### 경제지표 아카이빙 (indicators.py)
 

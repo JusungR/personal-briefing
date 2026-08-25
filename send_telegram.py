@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """텔레그램 요약 발송 (briefing-prompt.md Section 6이 stdin으로 호출).
 
 견고화: 길이 캡(4096) · timeout · 네트워크 재시도 · Markdown 실패 시 plain 폴백.
